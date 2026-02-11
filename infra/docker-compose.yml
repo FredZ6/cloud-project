@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: cloud-postgres
+    environment:
+      POSTGRES_USER: cloud
+      POSTGRES_PASSWORD: cloud
+      POSTGRES_DB: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init-multiple-dbs.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloud -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: cloud-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: cloud
+      RABBITMQ_DEFAULT_PASS: cloud
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

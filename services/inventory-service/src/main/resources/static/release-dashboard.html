@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Release Audit Dashboard</title>
+    <link rel="stylesheet" href="/assets/release-dashboard.css">
+</head>
+<body>
+<div class="aurora aurora-left" aria-hidden="true"></div>
+<div class="aurora aurora-right" aria-hidden="true"></div>
+
+<main class="page">
+    <header class="hero card reveal" style="--delay: 0ms;">
+        <p class="eyebrow">Inventory Service</p>
+        <h1>Release Audit Dashboard</h1>
+        <p class="subhead">Track compensation events and export CSV reports from live inventory release audit data.</p>
+    </header>
+
+    <section class="filters card reveal" style="--delay: 100ms;">
+        <h2>Filters</h2>
+        <div class="filter-grid">
+            <label>
+                <span>Order ID</span>
+                <input id="orderId" type="text" placeholder="UUID (optional)">
+            </label>
+            <label>
+                <span>From</span>
+                <input id="fromTime" type="datetime-local">
+            </label>
+            <label>
+                <span>To</span>
+                <input id="toTime" type="datetime-local">
+            </label>
+            <label>
+                <span>Page Size</span>
+                <select id="pageSize">
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </label>
+            <label>
+                <span>Export Limit</span>
+                <input id="exportLimit" type="number" min="1" max="10000" value="1000">
+            </label>
+        </div>
+        <div class="actions">
+            <button id="loadButton" class="btn btn-primary" type="button">Load Data</button>
+            <button id="resetButton" class="btn btn-muted" type="button">Reset</button>
+            <button id="exportButton" class="btn btn-accent" type="button">Export CSV</button>
+        </div>
+        <div class="live-controls">
+            <label class="toggle-wrap" for="autoRefreshToggle">
+                <input id="autoRefreshToggle" type="checkbox">
+                <span class="toggle-track" aria-hidden="true"></span>
+                <span>Auto Refresh</span>
+            </label>
+            <label class="interval-wrap" for="autoRefreshInterval">
+                <span>Interval</span>
+                <select id="autoRefreshInterval">
+                    <option value="15">15s</option>
+                    <option value="30" selected>30s</option>
+                    <option value="60">60s</option>
+                </select>
+            </label>
+            <p id="autoRefreshState" class="live-state">Auto refresh is off.</p>
+        </div>
+        <p id="statusMessage" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="summary-grid reveal" style="--delay: 180ms;">
+        <article class="metric card">
+            <p class="metric-label">Matched Events</p>
+            <p id="metricTotal" class="metric-value">0</p>
+        </article>
+        <article class="metric card">
+            <p class="metric-label">Rows On Page</p>
+            <p id="metricPageCount" class="metric-value">0</p>
+        </article>
+        <article class="metric card">
+            <p class="metric-label">Newest Event</p>
+            <p id="metricNewest" class="metric-value metric-small">-</p>
+        </article>
+        <article class="metric card">
+            <p class="metric-label">Oldest Event</p>
+            <p id="metricOldest" class="metric-value metric-small">-</p>
+        </article>
+    </section>
+
+    <section class="charts-grid reveal" style="--delay: 240ms;">
+        <article class="card">
+            <div class="panel-head">
+                <h2>Time Trend (Current Page)</h2>
+                <p id="trendHint">No data loaded yet.</p>
+            </div>
+            <svg id="trendChart" class="trend-chart" viewBox="0 0 640 220" preserveAspectRatio="none" role="img"
+                 aria-label="Release events trend chart"></svg>
+        </article>
+        <article class="card">
+            <div class="panel-head">
+                <h2>Reason Share (Current Page)</h2>
+                <p id="reasonHint">No data loaded yet.</p>
+            </div>
+            <div class="share-layout">
+                <div id="reasonDonut" class="reason-donut empty">
+                    <div id="reasonDonutCenter" class="reason-donut-center">
+                        <span class="donut-total">0</span>
+                        <span class="donut-label">events</span>
+                    </div>
+                </div>
+                <ul id="reasonLegend" class="reason-legend">
+                    <li class="empty">No reasons to display.</li>
+                </ul>
+            </div>
+        </article>
+    </section>
+
+    <section class="card table-wrap reveal" style="--delay: 300ms;">
+        <div class="panel-head">
+            <h2>Release Events</h2>
+            <p id="pageIndicator">Page 1</p>
+        </div>
+        <div class="table-shell">
+            <table>
+                <thead>
+                <tr>
+                    <th>Release ID</th>
+                    <th>Order ID</th>
+                    <th>Reservation ID</th>
+                    <th>Reason</th>
+                    <th>Created At</th>
+                </tr>
+                </thead>
+                <tbody id="eventRows">
+                <tr>
+                    <td colspan="5" class="empty">Load data to view release events.</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination">
+            <button id="prevPageButton" class="btn btn-muted" type="button">Previous</button>
+            <button id="nextPageButton" class="btn btn-muted" type="button">Next</button>
+        </div>
+    </section>
+</main>
+
+<script src="/assets/release-dashboard.js"></script>
+</body>
+</html>

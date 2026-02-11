@@ -1,0 +1,17 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: auth-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  auth:
+    default-ttl-seconds: 3600
+    token-secret: ${AUTH_TOKEN_SECRET:dev-auth-secret-change-me}
