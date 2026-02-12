@@ -50,6 +50,9 @@ jobs:
             echo "::warning title=Docker API::${api_info}"
           fi
           docker version
+          docker_smoke="$(docker run --rm hello-world 2>&1 || true)"
+          docker_smoke_summary="$(printf '%s' "${docker_smoke}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350)"
+          echo "::warning title=Docker smoke::${docker_smoke_summary}"
           if ! mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test; then
             report_txt="$(find . -path '*/target/surefire-reports/*.txt' | head -n 1 || true)"
             report_xml="$(find . -path '*/target/surefire-reports/TEST-*.xml' | head -n 1 || true)"
