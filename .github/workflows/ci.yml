@@ -29,6 +29,7 @@ jobs:
     timeout-minutes: 25
     env:
       DOCKER_HOST: 'unix:///var/run/docker.sock'
+      DOCKER_API_VERSION: '1.44'
       TESTCONTAINERS_DOCKER_CLIENT_STRATEGY: 'org.testcontainers.dockerclient.UnixSocketClientProviderStrategy'
 
     steps:
