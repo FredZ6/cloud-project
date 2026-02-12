@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: quick-check
     timeout-minutes: 25
+    env:
+      DOCKER_API_VERSION: '1.44'
 
     steps:
       - name: Checkout
@@ -41,8 +43,9 @@ jobs:
 
       - name: Run Integration Tests
         run: |
+          echo "DOCKER_API_VERSION=${DOCKER_API_VERSION}"
           docker version
-          mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test
+          mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -Ddocker.api.version="${DOCKER_API_VERSION}" test
 
   openapi-check:
     runs-on: ubuntu-latest
