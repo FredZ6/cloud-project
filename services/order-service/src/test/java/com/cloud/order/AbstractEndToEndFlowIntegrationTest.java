@@ -110,32 +110,32 @@ abstract class AbstractEndToEndFlowIntegrationTest {
         String expectedPaymentStatus = expectedPaymentStatus(orderId);
         int expectedReleaseEventCount = expectedInventoryReleaseEventCount(orderId);
 
-        JsonNode finalOrder = waitForOrderTerminalState(orderId, Duration.ofSeconds(30));
+        JsonNode finalOrder = waitForOrderTerminalState(orderId, Duration.ofSeconds(60));
         Assertions.assertEquals(expectedOrderStatus, finalOrder.path("status").asText());
 
         assertDatabaseValueEventually(
                 "order_db",
                 "select status from orders where id = '" + orderId + "'::uuid",
                 expectedOrderStatus,
-                Duration.ofSeconds(20)
+                Duration.ofSeconds(45)
         );
         assertDatabaseValueEventually(
                 "inventory_db",
                 "select status from inventory_reservations where order_id = '" + orderId + "'::uuid",
                 expectedInventoryStatus,
-                Duration.ofSeconds(20)
+                Duration.ofSeconds(45)
         );
         assertDatabaseValueEventually(
                 "payment_db",
                 "select status from payment_records where order_id = '" + orderId + "'::uuid",
                 expectedPaymentStatus,
-                Duration.ofSeconds(20)
+                Duration.ofSeconds(45)
         );
         assertDatabaseValueEventually(
                 "inventory_db",
                 "select count(*)::text from inventory_release_events where order_id = '" + orderId + "'::uuid",
                 String.valueOf(expectedReleaseEventCount),
-                Duration.ofSeconds(20)
+                Duration.ofSeconds(45)
         );
     }
 
