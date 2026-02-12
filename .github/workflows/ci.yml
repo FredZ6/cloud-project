@@ -41,7 +41,6 @@ jobs:
 
       - name: Run Integration Tests
         run: |
-          unset DOCKER_API_VERSION
           docker version
           mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test
 
