@@ -20,19 +20,19 @@
     <section class="filters card reveal" style="--delay: 100ms;">
         <h2>Filters</h2>
         <div class="filter-grid">
-            <label>
+            <label class="field-order-id">
                 <span>Order ID</span>
                 <input id="orderId" type="text" placeholder="UUID (optional)">
             </label>
-            <label>
+            <label class="field-from-time">
                 <span>From</span>
                 <input id="fromTime" type="datetime-local">
             </label>
-            <label>
+            <label class="field-to-time">
                 <span>To</span>
                 <input id="toTime" type="datetime-local">
             </label>
-            <label>
+            <label class="field-page-size">
                 <span>Page Size</span>
                 <select id="pageSize">
                     <option value="20">20</option>
@@ -40,7 +40,7 @@
                     <option value="100">100</option>
                 </select>
             </label>
-            <label>
+            <label class="field-export-limit">
                 <span>Export Limit</span>
                 <input id="exportLimit" type="number" min="1" max="10000" value="1000">
             </label>

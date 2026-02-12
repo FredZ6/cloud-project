@@ -5,7 +5,8 @@
     --surface: #fffdf7;
     --ink: #1f2a2b;
     --muted: #5f6e6f;
-    --line: #d6d0bf;
+    /* Slightly stronger border so cards stay readable on the bright right-side background. */
+    --line: #c9c2ae;
     --primary: #0f766e;
     --primary-soft: #ccf3ee;
     --accent: #c05f2c;
@@ -15,6 +16,13 @@
 
 * {
     box-sizing: border-box;
+}
+
+html,
+body {
+    /* Prevent decorative fixed blobs (aurora) or long content from creating horizontal overflow,
+       which can visually shift the centered layout. */
+    overflow-x: hidden;
 }
 
 body {
@@ -49,10 +57,20 @@ body {
 }
 
 .page {
-    width: min(1120px, calc(100% - 2rem));
+    width: calc(100% - 2rem);
+    max-width: 1120px;
     margin: 2rem auto 3rem;
+    margin-inline: auto;
     display: grid;
+    /* Prevent grid items (notably the long-UUID table) from expanding the single column
+       beyond the container width, which visually shifts the whole page to the right. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
+}
+
+.page > * {
+    /* Allow children to shrink within the grid column instead of forcing overflow. */
+    min-width: 0;
 }
 
 .card {
@@ -112,7 +130,7 @@ h2 {
 .filter-grid {
     margin-top: 0.75rem;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: 0.75rem;
 }
 
@@ -123,9 +141,34 @@ label {
     color: var(--muted);
 }
 
+.filter-grid label {
+    min-width: 0;
+}
+
+.filter-grid .field-order-id {
+    grid-column: span 3;
+}
+
+.filter-grid .field-from-time {
+    grid-column: span 3;
+}
+
+.filter-grid .field-to-time {
+    grid-column: span 3;
+}
+
+.filter-grid .field-page-size {
+    grid-column: span 1;
+}
+
+.filter-grid .field-export-limit {
+    grid-column: span 2;
+}
+
 input,
 select {
     width: 100%;
+    min-width: 0;
     border: 1px solid #b8c6c6;
     border-radius: 10px;
     font-family: "Sora", sans-serif;
@@ -547,7 +590,22 @@ td.empty {
 
 @media (max-width: 980px) {
     .filter-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .filter-grid .field-order-id,
+    .filter-grid .field-from-time,
+    .filter-grid .field-to-time {
+        grid-column: span 3;
+    }
+
+    .filter-grid .field-page-size {
+        grid-column: span 3;
+    }
+
+    .filter-grid .field-export-limit {
+        /* 5 fields in a 2-column layout leaves the last row uneven; span full width to stay balanced. */
+        grid-column: 1 / -1;
     }
 
     .summary-grid {
@@ -570,12 +628,20 @@ td.empty {
 
 @media (max-width: 660px) {
     .page {
-        width: min(1120px, calc(100% - 1rem));
+        width: calc(100% - 1rem);
         margin-top: 1rem;
     }
 
     .filter-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+
+    .filter-grid .field-order-id,
+    .filter-grid .field-from-time,
+    .filter-grid .field-to-time,
+    .filter-grid .field-page-size,
+    .filter-grid .field-export-limit {
+        grid-column: 1;
     }
 
     .summary-grid {

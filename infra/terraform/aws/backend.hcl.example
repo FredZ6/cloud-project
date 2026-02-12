@@ -1,0 +1,5 @@
+bucket         = "cloud-order-platform-dev-tf-state-123456789012"
+key            = "cloud-order-platform/dev/aws.tfstate"
+region         = "us-east-1"
+dynamodb_table = "cloud-order-platform-dev-tf-locks"
+encrypt        = true

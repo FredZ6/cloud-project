@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.MDC;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -30,29 +31,41 @@ public class InventoryResultListener {
         String raw = new String(message.getBody(), StandardCharsets.UTF_8);
         JsonNode root = parseRoot(raw);
         String eventType = root.path("event_type").asText();
+        bindTraceToMdc(root.path("trace_id").asText(null));
 
-        if ("InventoryReserved".equals(eventType)) {
-            EventEnvelope<InventoryReservedData> envelope = parseReserved(raw);
-            String messageId = resolveMessageId(message, envelope.eventId());
-            orderStatusUpdateService.markReserved(messageId, envelope.data().orderId());
-            return;
-        }
+        try {
+            if ("InventoryReserved".equals(eventType)) {
+                EventEnvelope<InventoryReservedData> envelope = parseReserved(raw);
+                String messageId = resolveMessageId(message, envelope.eventId());
+                orderStatusUpdateService.markReserved(messageId, envelope.data().orderId());
+                return;
+            }
 
-        if ("InventoryFailed".equals(eventType)) {
-            EventEnvelope<InventoryFailedData> envelope = parseFailed(raw);
-            String messageId = resolveMessageId(message, envelope.eventId());
-            orderStatusUpdateService.markInventoryFailed(messageId, envelope.data().orderId());
-            return;
-        }
+            if ("InventoryFailed".equals(eventType)) {
+                EventEnvelope<InventoryFailedData> envelope = parseFailed(raw);
+                String messageId = resolveMessageId(message, envelope.eventId());
+                orderStatusUpdateService.markInventoryFailed(messageId, envelope.data().orderId());
+                return;
+            }
 
-        if ("InventoryReleased".equals(eventType)) {
-            EventEnvelope<InventoryReleasedData> envelope = parseReleased(raw);
-            String messageId = resolveMessageId(message, envelope.eventId());
-            orderStatusUpdateService.markInventoryReleased(messageId, envelope.data().orderId());
-            return;
+            if ("InventoryReleased".equals(eventType)) {
+                EventEnvelope<InventoryReleasedData> envelope = parseReleased(raw);
+                String messageId = resolveMessageId(message, envelope.eventId());
+                orderStatusUpdateService.markInventoryReleased(messageId, envelope.data().orderId());
+                return;
+            }
+        } finally {
+            MDC.remove("trace_id");
         }
 
         throw new AmqpRejectAndDontRequeueException("Unsupported inventory event type: " + eventType);
+    }
+
+    private void bindTraceToMdc(String traceId) {
+        if (traceId == null || traceId.isBlank()) {
+            return;
+        }
+        MDC.put("trace_id", traceId.trim());
     }
 
     private JsonNode parseRoot(String raw) {

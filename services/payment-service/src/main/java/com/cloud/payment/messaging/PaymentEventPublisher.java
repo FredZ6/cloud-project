@@ -2,6 +2,8 @@ package com.cloud.payment.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -13,6 +15,8 @@ import java.util.UUID;
 
 @Component
 public class PaymentEventPublisher {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentEventPublisher.class);
 
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
@@ -56,19 +60,29 @@ public class PaymentEventPublisher {
             if (originalMessage.getMessageProperties().getMessageId() != null) {
                 message.getMessageProperties().setMessageId(originalMessage.getMessageProperties().getMessageId());
             }
+            copyHeaderIfPresent(originalMessage, message, "x-trace-id");
+            copyHeaderIfPresent(originalMessage, message, "x-event-type");
             return message;
         });
     }
 
     private <T> void publish(String routingKey, EventEnvelope<T> envelope) {
         String payload = toJson(envelope);
-        rabbitTemplate.convertAndSend(eventsExchange, routingKey, payload, withMessageId(envelope.eventId()));
+        rabbitTemplate.convertAndSend(eventsExchange, routingKey, payload,
+                withMessageId(envelope.eventId(), envelope.eventType(), envelope.traceId()));
+        log.debug("Published payment event type={} routingKey={} eventId={} traceId={}",
+                envelope.eventType(), routingKey, envelope.eventId(), envelope.traceId());
     }
 
-    private MessagePostProcessor withMessageId(UUID eventId) {
+    private MessagePostProcessor withMessageId(UUID eventId, String eventType, UUID traceId) {
         return (Message message) -> {
             message.getMessageProperties().setMessageId(eventId.toString());
             message.getMessageProperties().setContentType("application/json");
+            message.getMessageProperties().setHeader("x-event-id", eventId.toString());
+            message.getMessageProperties().setHeader("x-event-type", eventType);
+            if (traceId != null) {
+                message.getMessageProperties().setHeader("x-trace-id", traceId.toString());
+            }
             return message;
         };
     }
@@ -78,6 +92,13 @@ public class PaymentEventPublisher {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Failed to serialize payment event", exception);
+        }
+    }
+
+    private void copyHeaderIfPresent(Message source, Message target, String headerName) {
+        Object value = source.getMessageProperties().getHeaders().get(headerName);
+        if (value != null) {
+            target.getMessageProperties().setHeader(headerName, value);
         }
     }
 }

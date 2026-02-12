@@ -2,16 +2,20 @@
 
 ## Services
 
+- All services expose:
+  - OpenAPI JSON (`GET /v3/api-docs`) and Swagger UI (`GET /swagger-ui.html`).
+  - Actuator health/info endpoints, including liveness/readiness probes.
 - `order-service`
   - Owns orders and order lifecycle.
   - Provides idempotent order creation API.
-  - Requires bearer token on `POST /api/orders` and validates token signature/subject.
+  - Requires bearer token on `POST /api/orders`, validates token signature/issuer/subject, and enforces configured role (`buyer` by default).
   - Writes outbox events in the same DB transaction as order writes.
   - Triggers compensation by publishing `inventory.release.requested` on payment failure.
   - Adds identity context into event envelope (`identity.user_id`, `identity.roles`).
 - `inventory-service`
   - Owns stock and reservations.
   - Exposes stock upsert/query/reserve APIs.
+  - Uses Redis cache for hot stock reads (`GET /api/stocks/{skuId}`) with DB fallback.
   - Exposes release-audit query API (`GET /api/stocks/release-events` with pagination/filtering).
   - Exposes release-audit CSV export API (`GET /api/stocks/release-events/export`).
   - Hosts release-audit dashboard UI (`GET /dashboard`).
@@ -30,7 +34,16 @@
 - `auth-service`
   - Issues mock bearer tokens (`POST /api/auth/token`).
   - Supports token introspection (`POST /api/auth/introspect`).
-  - Uses HMAC-based token signature for local verification in `order-service`.
+  - Exposes JWKS (`GET /.well-known/jwks.json`) for signature validation.
+  - Signs access tokens as RSA JWT (`RS256` + `kid`).
+- `catalog-service`
+  - Owns product metadata (SKU, name, description, price, active flag).
+  - Exposes product upsert/query APIs (`PUT /api/catalog/products/{skuId}`, `GET /api/catalog/products`).
+  - Provides a lightweight catalog baseline for order validation and read-side scenarios.
+- `notification-service`
+  - Subscribes to `payment.*` events via RabbitMQ topic binding.
+  - Stores recent notification events in memory for read-side validation/demo.
+  - Exposes notification query API (`GET /api/notifications/events`).
 
 ## Messaging topology
 
@@ -56,6 +69,7 @@ Phase 1 binding:
 - `q.payment.inventory-reserved.dlq` for exhausted/poison messages
 - `q.order.inventory-result` <- `inventory.*`
 - `q.order.payment-result` <- `payment.*`
+- `q.notification.payment-result` <- `payment.*`
 
 ## Reliability patterns
 
@@ -68,3 +82,16 @@ Phase 1 binding:
 - Retry/DLQ in `inventory-service` for transient and poison-message handling.
 - Retry/DLQ in `payment-service` for transient and poison-message handling.
 - Consumer idempotency in `payment-service` and `order-service` for result events.
+- Cache invalidation in `inventory-service` on stock mutations (upsert/reserve/release).
+
+## Observability baseline
+
+- All six services expose Prometheus metrics (`/actuator/prometheus`).
+- Cache hit/miss/fallback/eviction counters are emitted for stock-read cache behavior.
+- HTTP requests include `X-Trace-Id` response header and MDC `trace_id` log field for correlation.
+- Micrometer tracing exports OTLP spans from all services to local OTel Collector (`http://localhost:4318/v1/traces`).
+- RabbitMQ template/listener observation is enabled for event publisher/consumer spans.
+- Event messages include correlation headers (`x-trace-id`, `x-event-type`, `x-event-id`) for queue-level debugging.
+- OTel Collector forwards traces to Jaeger for query/analysis.
+- Grafana is provisioned with Prometheus + Jaeger datasources and default `Inventory Service Overview` + `Platform E2E Overview` dashboards.
+- Prometheus alert rules cover cache fallback spikes, low cache hit ratio, elevated 5xx rate, and scrape-target down.

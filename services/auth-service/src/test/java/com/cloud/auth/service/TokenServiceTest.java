@@ -6,6 +6,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,10 +19,15 @@ class TokenServiceTest {
     private TokenService tokenService;
 
     @BeforeEach
-    void setUp() {
-        tokenService = new TokenService(new ObjectMapper());
-        ReflectionTestUtils.setField(tokenService, "tokenSecret", "test-secret");
+    void setUp() throws Exception {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+
+        JwtSigningKeyProvider keyProvider = new JwtSigningKeyProvider(keyPair, "test-key");
+        tokenService = new TokenService(new ObjectMapper(), keyProvider);
         ReflectionTestUtils.setField(tokenService, "defaultTtlSeconds", 3600);
+        ReflectionTestUtils.setField(tokenService, "issuer", "auth-service");
     }
 
     @Test
@@ -37,7 +44,10 @@ class TokenServiceTest {
     @Test
     void introspectShouldRejectTamperedToken() {
         var issued = tokenService.issueToken(new IssueTokenRequest("user-2", List.of(), 600));
-        String tampered = issued.token().substring(0, issued.token().length() - 1) + "x";
+        String[] parts = issued.token().split("\\.");
+        String tamperedPayload = parts[1].substring(0, parts[1].length() - 1)
+                + (parts[1].endsWith("A") ? "B" : "A");
+        String tampered = parts[0] + "." + tamperedPayload + "." + parts[2];
 
         var introspection = tokenService.introspect(tampered);
 

@@ -4,6 +4,7 @@ import com.cloud.payment.service.PaymentProcessingService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.MDC;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -43,6 +44,7 @@ public class InventoryReservedListener {
 
         try {
             EventEnvelope<InventoryReservedData> envelope = parse(raw);
+            bindTraceToMdc(envelope.traceId());
             String messageId = resolveMessageId(message, envelope.eventId());
             paymentProcessingService.processInventoryReserved(messageId, envelope);
         } catch (RuntimeException exception) {
@@ -51,7 +53,16 @@ public class InventoryReservedListener {
                 return;
             }
             throw new AmqpRejectAndDontRequeueException("Transient payment processing failure", exception);
+        } finally {
+            MDC.remove("trace_id");
         }
+    }
+
+    private void bindTraceToMdc(UUID traceId) {
+        if (traceId == null) {
+            return;
+        }
+        MDC.put("trace_id", traceId.toString());
     }
 
     private EventEnvelope<InventoryReservedData> parse(String raw) {

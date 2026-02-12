@@ -13,12 +13,15 @@
         <module>services/inventory-service</module>
         <module>services/payment-service</module>
         <module>services/auth-service</module>
+        <module>services/catalog-service</module>
+        <module>services/notification-service</module>
     </modules>
 
     <properties>
         <java.version>17</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <spring.boot.version>3.3.6</spring.boot.version>
+        <springdoc.version>2.6.0</springdoc.version>
         <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 

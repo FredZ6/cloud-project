@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.vscode
+docs
+infra
+scripts
+**/target
+**/.mvn
+**/.gradle
+*.iml
+*.log
+.DS_Store

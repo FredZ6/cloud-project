@@ -2,6 +2,7 @@ package com.cloud.inventory.service;
 
 import com.cloud.inventory.domain.InventoryReleaseEventEntity;
 import com.cloud.inventory.repo.InventoryReleaseEventRepository;
+import org.mockito.ArgumentMatchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -10,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -20,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,13 +58,19 @@ class InventoryReleaseAuditServiceTest {
                 Instant.parse("2026-02-11T10:00:00Z")
         );
 
-        when(inventoryReleaseEventRepository.search(eq(orderId), eq(from), eq(to), any(Pageable.class)))
+        when(inventoryReleaseEventRepository.findAll(
+                ArgumentMatchers.<Specification<InventoryReleaseEventEntity>>any(),
+                any(Pageable.class)
+        ))
                 .thenReturn(new PageImpl<>(List.of(sample)));
 
         var result = inventoryReleaseAuditService.listReleaseEvents(orderId, from, to, 1, 5);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(inventoryReleaseEventRepository).search(eq(orderId), eq(from), eq(to), pageableCaptor.capture());
+        verify(inventoryReleaseEventRepository).findAll(
+                ArgumentMatchers.<Specification<InventoryReleaseEventEntity>>any(),
+                pageableCaptor.capture()
+        );
 
         assertEquals(1, pageableCaptor.getValue().getPageNumber());
         assertEquals(5, pageableCaptor.getValue().getPageSize());
@@ -84,13 +91,19 @@ class InventoryReleaseAuditServiceTest {
                 Instant.parse("2026-02-11T10:00:00Z")
         );
 
-        when(inventoryReleaseEventRepository.search(eq(orderId), eq(from), eq(to), any(Pageable.class)))
+        when(inventoryReleaseEventRepository.findAll(
+                ArgumentMatchers.<Specification<InventoryReleaseEventEntity>>any(),
+                any(Pageable.class)
+        ))
                 .thenReturn(new PageImpl<>(List.of(sample)));
 
         String csv = inventoryReleaseAuditService.exportReleaseEventsCsv(orderId, from, to, 50);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(inventoryReleaseEventRepository).search(eq(orderId), eq(from), eq(to), pageableCaptor.capture());
+        verify(inventoryReleaseEventRepository).findAll(
+                ArgumentMatchers.<Specification<InventoryReleaseEventEntity>>any(),
+                pageableCaptor.capture()
+        );
         assertEquals(0, pageableCaptor.getValue().getPageNumber());
         assertEquals(50, pageableCaptor.getValue().getPageSize());
         assertTrue(csv.startsWith("release_id,order_id,reservation_id,reason,created_at\n"));
