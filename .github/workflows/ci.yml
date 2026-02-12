@@ -68,6 +68,13 @@ jobs:
               if [ -n "${diagnostics}" ]; then
                 echo "::warning title=Testcontainers diagnostics::${diagnostics}"
               fi
+              causes="$(grep -m 3 'Caused by:' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350 || true)"
+              if [ -z "${causes}" ]; then
+                causes="$(grep -m 2 -E 'Error response from daemon|permission denied|No such file|Cannot connect' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350 || true)"
+              fi
+              if [ -n "${causes}" ]; then
+                echo "::warning title=Testcontainers causes::${causes}"
+              fi
             fi
             if [ -n "${summary}" ]; then
               echo "::error title=Integration tests failed::${summary}"
