@@ -28,7 +28,7 @@ jobs:
     needs: quick-check
     timeout-minutes: 25
     env:
-      DOCKER_API_VERSION: '1.44'
+      DOCKER_API_VERSION: '1.47'
 
     steps:
       - name: Checkout
@@ -43,9 +43,17 @@ jobs:
 
       - name: Run Integration Tests
         run: |
+          set -euo pipefail
           echo "DOCKER_API_VERSION=${DOCKER_API_VERSION}"
           docker version
-          mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -Ddocker.api.version="${DOCKER_API_VERSION}" test
+          if ! mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -Ddocker.api.version="${DOCKER_API_VERSION}" test; then
+            report="$(find . -path '*/target/surefire-reports/*.txt' | head -n 1 || true)"
+            if [ -n "${report}" ]; then
+              summary="$(tr '\n' ' ' < "${report}" | sed 's/[[:space:]]\\+/ /g' | cut -c1-300)"
+              echo "::error title=Integration tests failed::${summary}"
+            fi
+            exit 1
+          fi
 
   openapi-check:
     runs-on: ubuntu-latest
