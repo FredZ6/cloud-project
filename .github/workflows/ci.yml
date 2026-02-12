@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 25
     env:
       DOCKER_HOST: 'unix:///var/run/docker.sock'
-      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: '/var/run/docker.sock'
+      TESTCONTAINERS_DOCKER_CLIENT_STRATEGY: 'org.testcontainers.dockerclient.UnixSocketClientProviderStrategy'
 
     steps:
       - name: Checkout
@@ -70,6 +70,10 @@ jobs:
               diagnostics="$(awk '/Could not find a valid Docker environment/{flag=1} flag && count < 8 {print; count++}' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350)"
               if [ -n "${diagnostics}" ]; then
                 echo "::warning title=Testcontainers diagnostics::${diagnostics}"
+              fi
+              strategies="$(grep -E 'DockerClientProviderStrategy|ClientProviderStrategy|UnixSocketClientProviderStrategy|EnvironmentAndSystemPropertyClientProviderStrategy|DockerDesktopClientProviderStrategy|RootlessDockerClientProviderStrategy' "${report_txt}" | head -n 18 | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350 || true)"
+              if [ -n "${strategies}" ]; then
+                echo "::warning title=Testcontainers strategies::${strategies}"
               fi
               causes="$(grep -m 3 'Caused by:' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350 || true)"
               if [ -z "${causes}" ]; then
