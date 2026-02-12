@@ -40,7 +40,10 @@ jobs:
           cache: maven
 
       - name: Run Integration Tests
-        run: mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test
+        run: |
+          unset DOCKER_API_VERSION
+          docker version
+          mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test
 
   openapi-check:
     runs-on: ubuntu-latest
