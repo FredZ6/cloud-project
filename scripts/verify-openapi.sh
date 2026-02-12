@@ -13,15 +13,25 @@ services=(
   notification-service
 )
 
+match_pattern() {
+  local pattern="$1"
+  local file="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -q "${pattern}" "${file}"
+  else
+    grep -Eq "${pattern}" "${file}"
+  fi
+}
+
 for service in "${services[@]}"; do
   pom="services/${service}/pom.xml"
   app_yml="services/${service}/src/main/resources/application.yml"
 
-  rg -q "springdoc-openapi-starter-webmvc-ui" "${pom}" \
+  match_pattern "springdoc-openapi-starter-webmvc-ui" "${pom}" \
     || { echo "Missing springdoc dependency in ${pom}" >&2; exit 1; }
-  rg -q "path:\\s*/v3/api-docs" "${app_yml}" \
+  match_pattern "path:\\s*/v3/api-docs" "${app_yml}" \
     || { echo "Missing /v3/api-docs path in ${app_yml}" >&2; exit 1; }
-  rg -q "path:\\s*/swagger-ui.html" "${app_yml}" \
+  match_pattern "path:\\s*/swagger-ui.html" "${app_yml}" \
     || { echo "Missing /swagger-ui.html path in ${app_yml}" >&2; exit 1; }
 done
 
