@@ -47,9 +47,19 @@ jobs:
           echo "DOCKER_API_VERSION=${DOCKER_API_VERSION}"
           docker version
           if ! mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -Ddocker.api.version="${DOCKER_API_VERSION}" test; then
-            report="$(find . -path '*/target/surefire-reports/*.txt' | head -n 1 || true)"
-            if [ -n "${report}" ]; then
-              summary="$(tr '\n' ' ' < "${report}" | sed 's/[[:space:]]\\+/ /g' | cut -c1-300)"
+            report_txt="$(find . -path '*/target/surefire-reports/*.txt' | head -n 1 || true)"
+            report_xml="$(find . -path '*/target/surefire-reports/TEST-*.xml' | head -n 1 || true)"
+            summary=""
+            if [ -n "${report_xml}" ]; then
+              summary="$(grep -m1 -Eo 'message=\"[^\"]+\"' "${report_xml}" | sed 's/^message=\"//; s/\"$//' || true)"
+            fi
+            if [ -z "${summary}" ] && [ -n "${report_txt}" ]; then
+              summary="$(grep -m1 -E 'Caused by:|Exception|Error:' "${report_txt}" || true)"
+            fi
+            if [ -z "${summary}" ] && [ -n "${report_txt}" ]; then
+              summary="$(tr '\n' ' ' < "${report_txt}" | sed 's/[[:space:]]\\+/ /g' | cut -c1-300)"
+            fi
+            if [ -n "${summary}" ]; then
               echo "::error title=Integration tests failed::${summary}"
             fi
             exit 1
