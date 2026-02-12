@@ -27,10 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: quick-check
     timeout-minutes: 25
-    env:
-      DOCKER_HOST: 'unix:///var/run/docker.sock'
-      DOCKER_API_VERSION: '1.44'
-      TESTCONTAINERS_DOCKER_CLIENT_STRATEGY: 'org.testcontainers.dockerclient.UnixSocketClientProviderStrategy'
 
     steps:
       - name: Checkout
@@ -44,51 +40,7 @@ jobs:
           cache: maven
 
       - name: Run Integration Tests
-        run: |
-          set -euo pipefail
-          api_info="$(docker version --format 'client={{.Client.APIVersion}} server={{.Server.APIVersion}} min={{.Server.MinAPIVersion}}' || true)"
-          if [ -n "${api_info}" ]; then
-            echo "::warning title=Docker API::${api_info}"
-          fi
-          docker version
-          docker_smoke="$(docker run --rm hello-world 2>&1 || true)"
-          docker_smoke_summary="$(printf '%s' "${docker_smoke}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350)"
-          echo "::warning title=Docker smoke::${docker_smoke_summary}"
-          if ! mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test; then
-            report_txt="$(find . -path '*/target/surefire-reports/*.txt' | head -n 1 || true)"
-            report_xml="$(find . -path '*/target/surefire-reports/TEST-*.xml' | head -n 1 || true)"
-            summary=""
-            if [ -n "${report_xml}" ]; then
-              summary="$(grep -m1 -Eo 'message=\"[^\"]+\"' "${report_xml}" | sed 's/^message=\"//; s/\"$//' || true)"
-            fi
-            if [ -z "${summary}" ] && [ -n "${report_txt}" ]; then
-              summary="$(grep -m1 -E 'Caused by:|Exception|Error:' "${report_txt}" || true)"
-            fi
-            if [ -z "${summary}" ] && [ -n "${report_txt}" ]; then
-              summary="$(tr '\n' ' ' < "${report_txt}" | sed 's/[[:space:]]\\+/ /g' | cut -c1-300)"
-            fi
-            if [ -n "${report_txt}" ]; then
-              diagnostics="$(awk '/Could not find a valid Docker environment/{flag=1} flag && count < 8 {print; count++}' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350)"
-              if [ -n "${diagnostics}" ]; then
-                echo "::warning title=Testcontainers diagnostics::${diagnostics}"
-              fi
-              strategies="$(grep -E 'DockerClientProviderStrategy|ClientProviderStrategy|UnixSocketClientProviderStrategy|EnvironmentAndSystemPropertyClientProviderStrategy|DockerDesktopClientProviderStrategy|RootlessDockerClientProviderStrategy' "${report_txt}" | head -n 18 | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350 || true)"
-              if [ -n "${strategies}" ]; then
-                echo "::warning title=Testcontainers strategies::${strategies}"
-              fi
-              causes="$(grep -m 3 'Caused by:' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350 || true)"
-              if [ -z "${causes}" ]; then
-                causes="$(grep -m 2 -E 'Error response from daemon|permission denied|No such file|Cannot connect' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350 || true)"
-              fi
-              if [ -n "${causes}" ]; then
-                echo "::warning title=Testcontainers causes::${causes}"
-              fi
-            fi
-            if [ -n "${summary}" ]; then
-              echo "::error title=Integration tests failed::${summary}"
-            fi
-            exit 1
-          fi
+        run: mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test
 
   openapi-check:
     runs-on: ubuntu-latest
