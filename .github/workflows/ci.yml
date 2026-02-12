@@ -63,6 +63,12 @@ jobs:
             if [ -z "${summary}" ] && [ -n "${report_txt}" ]; then
               summary="$(tr '\n' ' ' < "${report_txt}" | sed 's/[[:space:]]\\+/ /g' | cut -c1-300)"
             fi
+            if [ -n "${report_txt}" ]; then
+              diagnostics="$(awk '/Could not find a valid Docker environment/{flag=1} flag && count < 8 {print; count++}' "${report_txt}" | tr '\n' ' ' | sed 's/[[:space:]]\\+/ /g' | cut -c1-350)"
+              if [ -n "${diagnostics}" ]; then
+                echo "::warning title=Testcontainers diagnostics::${diagnostics}"
+              fi
+            fi
             if [ -n "${summary}" ]; then
               echo "::error title=Integration tests failed::${summary}"
             fi
