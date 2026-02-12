@@ -56,6 +56,12 @@ abstract class AbstractEndToEndFlowIntegrationTest {
 
     @BeforeAll
     void setUp() throws Exception {
+        // Testcontainers uses a shaded docker-java core which defaults to an old API (v1.32) unless overridden.
+        // Modern Docker daemons on CI reject such old versions (minimum supported is typically >= v1.44).
+        if (System.getProperty("api.version") == null) {
+            System.setProperty("api.version", "1.44");
+        }
+
         postgres.start();
         rabbitmq.start();
 
