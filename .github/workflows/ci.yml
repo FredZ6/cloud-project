@@ -28,7 +28,8 @@ jobs:
     needs: quick-check
     timeout-minutes: 25
     env:
-      DOCKER_API_VERSION: '1.47'
+      DOCKER_HOST: 'unix:///var/run/docker.sock'
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: '/var/run/docker.sock'
 
     steps:
       - name: Checkout
@@ -44,9 +45,12 @@ jobs:
       - name: Run Integration Tests
         run: |
           set -euo pipefail
-          echo "DOCKER_API_VERSION=${DOCKER_API_VERSION}"
+          api_info="$(docker version --format 'client={{.Client.APIVersion}} server={{.Server.APIVersion}} min={{.Server.MinAPIVersion}}' || true)"
+          if [ -n "${api_info}" ]; then
+            echo "::warning title=Docker API::${api_info}"
+          fi
           docker version
-          if ! mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -Ddocker.api.version="${DOCKER_API_VERSION}" test; then
+          if ! mvn -B -ntp '-Dtest=*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test; then
             report_txt="$(find . -path '*/target/surefire-reports/*.txt' | head -n 1 || true)"
             report_xml="$(find . -path '*/target/surefire-reports/TEST-*.xml' | head -n 1 || true)"
             summary=""
