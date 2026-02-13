@@ -56,6 +56,10 @@ abstract class AbstractEndToEndFlowIntegrationTest {
 
     @BeforeAll
     void setUp() throws Exception {
+        // INTENTIONAL: used only to validate that GitHub branch protection enforces required checks.
+        // Do not merge this change.
+        Assertions.fail("INTENTIONAL: validating required checks enforcement. Do not merge.");
+
         // Testcontainers uses a shaded docker-java core which defaults to an old API (v1.32) unless overridden.
         // Modern Docker daemons on CI reject such old versions (minimum supported is typically >= v1.44).
         if (System.getProperty("api.version") == null) {
