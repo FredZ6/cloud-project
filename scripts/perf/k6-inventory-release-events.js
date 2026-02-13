@@ -4,6 +4,21 @@ import { check, sleep } from 'k6';
 const baseUrl = __ENV.INVENTORY_BASE_URL || 'http://localhost:8082';
 const pageSize = parseInt(__ENV.PAGE_SIZE || '20', 10);
 const deepPage = parseInt(__ENV.DEEP_PAGE || '500', 10);
+const mode = (__ENV.MODE || 'all').trim();
+
+function scenario(exec, tagsName) {
+  return {
+    executor: 'ramping-vus',
+    exec: exec,
+    startVUs: 1,
+    stages: [
+      { duration: '20s', target: 10 },
+      { duration: '40s', target: 30 },
+      { duration: '20s', target: 0 }
+    ],
+    tags: { name: tagsName }
+  };
+}
 
 function assertOk(res) {
   check(res, {
@@ -11,39 +26,22 @@ function assertOk(res) {
   });
 }
 
+const scenarios = {};
+if (mode === 'all' || mode === 'offset_shallow') {
+  scenarios.offset_shallow = scenario('offsetShallow', 'release_events_offset_page0');
+}
+if (mode === 'all' || mode === 'offset_deep') {
+  scenarios.offset_deep = scenario('offsetDeep', 'release_events_offset_deep');
+}
+if (mode === 'all' || mode === 'cursor_paging') {
+  scenarios.cursor_paging = scenario('cursorPaging', 'release_events_cursor');
+}
+if (Object.keys(scenarios).length === 0) {
+  throw new Error(`Invalid MODE='${mode}'. Use: all | offset_shallow | offset_deep | cursor_paging`);
+}
+
 export const options = {
-  scenarios: {
-    offset_shallow: {
-      executor: 'ramping-vus',
-      exec: 'offsetShallow',
-      startVUs: 1,
-      stages: [
-        { duration: '20s', target: 10 },
-        { duration: '40s', target: 30 },
-        { duration: '20s', target: 0 }
-      ]
-    },
-    offset_deep: {
-      executor: 'ramping-vus',
-      exec: 'offsetDeep',
-      startVUs: 1,
-      stages: [
-        { duration: '20s', target: 10 },
-        { duration: '40s', target: 30 },
-        { duration: '20s', target: 0 }
-      ]
-    },
-    cursor_paging: {
-      executor: 'ramping-vus',
-      exec: 'cursorPaging',
-      startVUs: 1,
-      stages: [
-        { duration: '20s', target: 10 },
-        { duration: '40s', target: 30 },
-        { duration: '20s', target: 0 }
-      ]
-    }
-  },
+  scenarios: scenarios,
   thresholds: {
     http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<250']
@@ -96,4 +94,3 @@ export function cursorPaging() {
   cursorAfter = hasMore && nextCursor ? nextCursor : null;
   sleep(0.1);
 }
-
