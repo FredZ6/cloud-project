@@ -1,0 +1,5 @@
+inventory_stock_cache_evictions_total{application="inventory-service"} 0.0
+inventory_stock_cache_fallback_total{application="inventory-service"} 0.0
+inventory_stock_cache_hits_total{application="inventory-service"} 0.0
+inventory_stock_cache_misses_total{application="inventory-service"} 0.0
+inventory_stock_cache_writes_total{application="inventory-service"} 0.0

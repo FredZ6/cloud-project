@@ -7,10 +7,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.security.Signature;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
@@ -20,12 +19,14 @@ import java.util.Optional;
 public class AuthTokenVerifier {
 
     private final ObjectMapper objectMapper;
+    private final JwtPublicKeyProvider publicKeyProvider;
 
-    @Value("${app.auth.token-secret:dev-auth-secret-change-me}")
-    private String tokenSecret;
+    @Value("${app.auth.expected-issuer:auth-service}")
+    private String expectedIssuer;
 
-    public AuthTokenVerifier(ObjectMapper objectMapper) {
+    public AuthTokenVerifier(ObjectMapper objectMapper, JwtPublicKeyProvider publicKeyProvider) {
         this.objectMapper = objectMapper;
+        this.publicKeyProvider = publicKeyProvider;
     }
 
     public Optional<AuthTokenClaims> verifyBearerAuthorization(String authorizationHeader) {
@@ -48,19 +49,44 @@ public class AuthTokenVerifier {
 
     private AuthTokenClaims verifyToken(String token) {
         String[] parts = token.split("\\.");
-        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+        if (parts.length != 3 || parts[0].isBlank() || parts[1].isBlank() || parts[2].isBlank()) {
             throw unauthorized("Invalid token format");
         }
 
-        String expectedSignature = sign(parts[0]);
-        if (!constantTimeEquals(parts[1], expectedSignature)) {
+        JsonNode header = parseJsonPart(parts[0], "Token header is invalid");
+        String algorithm = header.path("alg").asText("");
+        if (!"RS256".equals(algorithm)) {
+            throw unauthorized("Unsupported token algorithm");
+        }
+
+        String keyId = header.path("kid").asText("").trim();
+        RSAPublicKey publicKey;
+        try {
+            publicKey = publicKeyProvider.resolve(keyId);
+        } catch (Exception exception) {
+            throw unauthorized("Unable to resolve token signing key");
+        }
+
+        String signingInput = parts[0] + "." + parts[1];
+        if (!verifySignature(signingInput, parts[2], publicKey)) {
             throw unauthorized("Invalid token signature");
         }
 
-        JsonNode payload = parsePayload(parts[0]);
-        String userId = payload.path("user_id").asText("").trim();
+        JsonNode payload = parseJsonPart(parts[1], "Token payload is invalid");
+
+        String userId = payload.path("sub").asText(payload.path("user_id").asText("")).trim();
         if (userId.isEmpty()) {
             throw unauthorized("Token subject is missing");
+        }
+
+        String issuer = payload.path("iss").asText("").trim();
+        if (!expectedIssuer.isBlank()) {
+            if (issuer.isEmpty()) {
+                throw unauthorized("Token issuer is missing");
+            }
+            if (!expectedIssuer.equals(issuer)) {
+                throw unauthorized("Invalid token issuer");
+            }
         }
 
         long expEpochSeconds = payload.path("exp").asLong(0L);
@@ -77,31 +103,25 @@ public class AuthTokenVerifier {
         return new AuthTokenClaims(userId, roles, expiresAt);
     }
 
-    private JsonNode parsePayload(String payloadPart) {
+    private JsonNode parseJsonPart(String part, String errorMessage) {
         try {
-            byte[] payloadBytes = Base64.getUrlDecoder().decode(payloadPart);
-            return objectMapper.readTree(payloadBytes);
+            byte[] bytes = Base64.getUrlDecoder().decode(part);
+            return objectMapper.readTree(bytes);
         } catch (Exception exception) {
-            throw unauthorized("Token payload is invalid");
+            throw unauthorized(errorMessage);
         }
     }
 
-    private String sign(String payloadPart) {
+    private boolean verifySignature(String signingInput, String signaturePart, RSAPublicKey publicKey) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(tokenSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] signature = mac.doFinal(payloadPart.getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
+            byte[] signatureBytes = Base64.getUrlDecoder().decode(signaturePart);
+            Signature verifier = Signature.getInstance("SHA256withRSA");
+            verifier.initVerify(publicKey);
+            verifier.update(signingInput.getBytes(StandardCharsets.UTF_8));
+            return verifier.verify(signatureBytes);
         } catch (Exception exception) {
-            throw new IllegalStateException("Failed to verify token", exception);
+            return false;
         }
-    }
-
-    private boolean constantTimeEquals(String left, String right) {
-        return MessageDigest.isEqual(
-                left.getBytes(StandardCharsets.US_ASCII),
-                right.getBytes(StandardCharsets.US_ASCII)
-        );
     }
 
     private List<String> extractRoles(JsonNode rolesNode) {

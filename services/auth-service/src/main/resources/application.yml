@@ -6,12 +6,44 @@ spring:
     name: auth-service
 
 management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  pattern:
+    level: "%5p [trace_id=%X{trace_id:-}]"
 
 app:
   auth:
     default-ttl-seconds: 3600
-    token-secret: ${AUTH_TOKEN_SECRET:dev-auth-secret-change-me}
+    issuer: ${AUTH_TOKEN_ISSUER:auth-service}
+    rsa:
+      key-id: ${AUTH_RSA_KEY_ID:}
+      private-key-pem: ${AUTH_RSA_PRIVATE_KEY_PEM:}
+      public-key-pem: ${AUTH_RSA_PUBLIC_KEY_PEM:}

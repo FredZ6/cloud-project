@@ -1,0 +1,106 @@
+groups:
+  - name: inventory-service-alerts
+    rules:
+      - alert: InventoryCacheFallbackSpike
+        expr: sum(rate(inventory_stock_cache_fallback_total[5m])) > 0
+        for: 3m
+        labels:
+          severity: warning
+          service: inventory-service
+        annotations:
+          summary: "Inventory cache is frequently falling back to DB"
+          description: "Redis fallback counter is increasing in the last 5 minutes."
+
+      - alert: InventoryHttp5xxHigh
+        expr: sum(rate(http_server_requests_seconds_count{application="inventory-service",status=~"5.."}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: inventory-service
+        annotations:
+          summary: "Inventory service has elevated 5xx rate"
+          description: "5xx response rate is above 0.2 req/s for over 5 minutes."
+
+      - alert: InventoryCacheHitRatioLow
+        expr: |
+          (
+            sum(rate(inventory_stock_cache_hits_total[5m]))
+            /
+            (
+              sum(rate(inventory_stock_cache_hits_total[5m]))
+              + sum(rate(inventory_stock_cache_misses_total[5m]))
+            )
+          ) < 0.7
+          and
+          (
+            sum(rate(inventory_stock_cache_hits_total[5m]))
+            + sum(rate(inventory_stock_cache_misses_total[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: inventory-service
+        annotations:
+          summary: "Inventory cache hit ratio is low"
+          description: "Cache hit ratio stayed below 70% for 10 minutes."
+
+  - name: platform-service-alerts
+    rules:
+      - alert: OrderHttp5xxHigh
+        expr: sum(rate(http_server_requests_seconds_count{application="order-service",status=~"5.."}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: order-service
+        annotations:
+          summary: "Order service has elevated 5xx rate"
+          description: "5xx response rate is above 0.2 req/s for over 5 minutes."
+
+      - alert: PaymentHttp5xxHigh
+        expr: sum(rate(http_server_requests_seconds_count{application="payment-service",status=~"5.."}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: payment-service
+        annotations:
+          summary: "Payment service has elevated 5xx rate"
+          description: "5xx response rate is above 0.2 req/s for over 5 minutes."
+
+      - alert: AuthHttp5xxHigh
+        expr: sum(rate(http_server_requests_seconds_count{application="auth-service",status=~"5.."}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: auth-service
+        annotations:
+          summary: "Auth service has elevated 5xx rate"
+          description: "5xx response rate is above 0.2 req/s for over 5 minutes."
+
+      - alert: CatalogHttp5xxHigh
+        expr: sum(rate(http_server_requests_seconds_count{application="catalog-service",status=~"5.."}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: catalog-service
+        annotations:
+          summary: "Catalog service has elevated 5xx rate"
+          description: "5xx response rate is above 0.2 req/s for over 5 minutes."
+
+      - alert: NotificationHttp5xxHigh
+        expr: sum(rate(http_server_requests_seconds_count{application="notification-service",status=~"5.."}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: notification-service
+        annotations:
+          summary: "Notification service has elevated 5xx rate"
+          description: "5xx response rate is above 0.2 req/s for over 5 minutes."
+
+      - alert: ServiceScrapeDown
+        expr: up{job=~"order-service|inventory-service|payment-service|auth-service|catalog-service|notification-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service scrape target is down"
+          description: "Prometheus cannot scrape {{ $labels.job }}."

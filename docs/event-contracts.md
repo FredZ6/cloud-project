@@ -145,10 +145,52 @@ Request:
 
 ```json
 {
-  "token": "payload.signature"
+  "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
 
+JWKS: `GET /.well-known/jwks.json`
+
 ## Order API Auth Requirement
 
-`POST /api/orders` requires `Authorization: Bearer <payload.signature>`.
+`POST /api/orders` requires `Authorization: Bearer <jwt>` and role `buyer` (configurable via `AUTH_REQUIRED_ORDER_ROLE`).
+
+## Catalog APIs (Baseline)
+
+`PUT /api/catalog/products/{skuId}`
+
+Request:
+
+```json
+{
+  "name": "Demo Product",
+  "description": "Sample item",
+  "price": 19.90,
+  "active": true
+}
+```
+
+`GET /api/catalog/products/{skuId}`
+
+`GET /api/catalog/products?active=true`
+
+## Notification Query APIs (Baseline)
+
+`GET /api/notifications/events`
+
+Query params:
+- `orderId` (optional UUID)
+- `eventType` (optional string, e.g. `PaymentFailed`)
+- `size` (default `20`, max `200`)
+
+`POST /api/notifications/events/synthetic-failure`
+
+Request:
+
+```json
+{
+  "orderId": "uuid",
+  "paymentId": "uuid",
+  "reason": "MOCK_DECLINED"
+}
+```

@@ -6,6 +6,7 @@ import com.cloud.inventory.service.ReservationOutcome;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.MDC;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -52,6 +53,7 @@ public class OrderCreatedListener {
 
         try {
             EventEnvelope<OrderCreatedData> envelope = parse(raw);
+            bindTraceToMdc(envelope.traceId());
             String messageId = resolveMessageId(message, envelope);
             if (consumedMessageService.isConsumed(messageId, CONSUMER_NAME)) {
                 return;
@@ -70,7 +72,16 @@ public class OrderCreatedListener {
                 return;
             }
             throw new AmqpRejectAndDontRequeueException("Transient inventory processing failure", exception);
+        } finally {
+            MDC.remove("trace_id");
         }
+    }
+
+    private void bindTraceToMdc(UUID traceId) {
+        if (traceId == null) {
+            return;
+        }
+        MDC.put("trace_id", traceId.toString());
     }
 
     private EventEnvelope<OrderCreatedData> parse(String raw) {

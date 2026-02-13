@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: cloud-platform-dashboards
+    orgId: 1
+    folder: Cloud Platform
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 15
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

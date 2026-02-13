@@ -1,0 +1,13 @@
+aws_region   = "us-east-1"
+project_name = "cloud-order-platform"
+environment  = "dev"
+
+# Optionally override generated names.
+# state_bucket_name = "cloud-order-platform-dev-tf-state-123456789012"
+# lock_table_name   = "cloud-order-platform-dev-tf-locks"
+
+# Suggested key path for the main stack state object.
+state_key = "cloud-order-platform/dev/aws.tfstate"
+
+# Keep false for non-disposable environments.
+force_destroy_state_bucket = false

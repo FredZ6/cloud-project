@@ -1,0 +1,12 @@
+                                                                                        QUERY PLAN                                                                                         
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.42..2.21 rows=20 width=71) (actual time=0.017..0.080 rows=20 loops=1)
+   Buffers: shared hit=23
+   ->  Index Scan using idx_inventory_release_events_created_at_id_desc on inventory_release_events  (cost=0.42..17864.40 rows=200000 width=71) (actual time=0.016..0.078 rows=20 loops=1)
+         Buffers: shared hit=23
+ Planning:
+   Buffers: shared hit=130
+ Planning Time: 0.286 ms
+ Execution Time: 0.101 ms
+(8 rows)
+

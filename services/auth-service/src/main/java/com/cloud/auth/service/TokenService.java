@@ -7,46 +7,57 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.security.Signature;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.io.IOException;
 
 @Service
 public class TokenService {
 
     private final ObjectMapper objectMapper;
+    private final JwtSigningKeyProvider signingKeyProvider;
 
     @Value("${app.auth.default-ttl-seconds:3600}")
     private int defaultTtlSeconds;
 
-    @Value("${app.auth.token-secret:dev-auth-secret-change-me}")
-    private String tokenSecret;
+    @Value("${app.auth.issuer:auth-service}")
+    private String issuer;
 
-    public TokenService(ObjectMapper objectMapper) {
+    public TokenService(ObjectMapper objectMapper, JwtSigningKeyProvider signingKeyProvider) {
         this.objectMapper = objectMapper;
+        this.signingKeyProvider = signingKeyProvider;
     }
 
     public TokenIssueResult issueToken(IssueTokenRequest request) {
-        Instant expiresAt = Instant.now().plusSeconds(resolveTtlSeconds(request.ttlSeconds()));
+        Instant issuedAt = Instant.now();
+        Instant expiresAt = issuedAt.plusSeconds(resolveTtlSeconds(request.ttlSeconds()));
         String userId = normalizeUserId(request.userId());
         List<String> roles = normalizeRoles(request.roles());
 
+        Map<String, Object> header = new LinkedHashMap<>();
+        header.put("alg", "RS256");
+        header.put("typ", "JWT");
+        header.put("kid", signingKeyProvider.keyId());
+
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("sub", userId);
         payload.put("user_id", userId);
         payload.put("roles", roles);
+        payload.put("iss", issuer);
+        payload.put("iat", issuedAt.getEpochSecond());
         payload.put("exp", expiresAt.getEpochSecond());
 
+        String headerPart = base64UrlEncode(toJsonBytes(header));
         String payloadPart = base64UrlEncode(toJsonBytes(payload));
-        String signaturePart = sign(payloadPart);
+        String signingInput = headerPart + "." + payloadPart;
+        String signaturePart = sign(signingInput);
 
-        String token = payloadPart + "." + signaturePart;
+        String token = signingInput + "." + signaturePart;
         AuthTokenClaims claims = new AuthTokenClaims(userId, roles, expiresAt);
         return new TokenIssueResult(token, claims);
     }
@@ -66,17 +77,32 @@ public class TokenService {
         }
 
         String[] parts = token.trim().split("\\.");
-        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+        if (parts.length != 3 || parts[0].isBlank() || parts[1].isBlank() || parts[2].isBlank()) {
             throw new TokenValidationException("TOKEN_MALFORMED");
         }
 
-        String expectedSignature = sign(parts[0]);
-        if (!constantTimeEquals(parts[1], expectedSignature)) {
+        JsonNode header = parseJsonPart(parts[0], "TOKEN_HEADER_INVALID");
+        if (!"RS256".equals(header.path("alg").asText(""))) {
+            throw new TokenValidationException("TOKEN_ALG_INVALID");
+        }
+
+        String keyId = header.path("kid").asText("").trim();
+        if (!keyId.isEmpty() && !signingKeyProvider.keyId().equals(keyId)) {
+            throw new TokenValidationException("TOKEN_KID_UNKNOWN");
+        }
+
+        String signingInput = parts[0] + "." + parts[1];
+        if (!verifySignature(signingInput, parts[2])) {
             throw new TokenValidationException("TOKEN_SIGNATURE_INVALID");
         }
 
-        JsonNode payload = parsePayload(parts[0]);
-        String userId = normalizeUserId(payload.path("user_id").asText(""));
+        JsonNode payload = parseJsonPart(parts[1], "TOKEN_PAYLOAD_INVALID");
+        String userId = normalizeUserId(payload.path("sub").asText(payload.path("user_id").asText("")));
+
+        String tokenIssuer = payload.path("iss").asText("").trim();
+        if (!issuer.isBlank() && !issuer.equals(tokenIssuer)) {
+            throw new TokenValidationException("TOKEN_ISSUER_INVALID");
+        }
 
         long expEpochSeconds = payload.path("exp").asLong(0L);
         if (expEpochSeconds <= 0L) {
@@ -92,6 +118,10 @@ public class TokenService {
         return new AuthTokenClaims(userId, roles, expiresAt);
     }
 
+    public Map<String, Object> currentJwk() {
+        return signingKeyProvider.toJwk();
+    }
+
     private int resolveTtlSeconds(Integer requestedTtlSeconds) {
         if (requestedTtlSeconds == null) {
             return defaultTtlSeconds;
@@ -99,12 +129,12 @@ public class TokenService {
         return requestedTtlSeconds;
     }
 
-    private JsonNode parsePayload(String payloadPart) {
+    private JsonNode parseJsonPart(String encodedPart, String reason) {
         try {
-            byte[] payloadBytes = Base64.getUrlDecoder().decode(payloadPart);
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(encodedPart);
             return objectMapper.readTree(payloadBytes);
         } catch (IllegalArgumentException | IOException exception) {
-            throw new TokenValidationException("TOKEN_PAYLOAD_INVALID");
+            throw new TokenValidationException(reason);
         }
     }
 
@@ -163,21 +193,27 @@ public class TokenService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
     }
 
-    private String sign(String payloadPart) {
+    private String sign(String signingInput) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(tokenSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return base64UrlEncode(mac.doFinal(payloadPart.getBytes(StandardCharsets.UTF_8)));
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            signature.initSign(signingKeyProvider.privateKey());
+            signature.update(signingInput.getBytes(StandardCharsets.UTF_8));
+            return base64UrlEncode(signature.sign());
         } catch (Exception exception) {
             throw new IllegalStateException("Failed to sign token", exception);
         }
     }
 
-    private boolean constantTimeEquals(String left, String right) {
-        return MessageDigest.isEqual(
-                left.getBytes(StandardCharsets.US_ASCII),
-                right.getBytes(StandardCharsets.US_ASCII)
-        );
+    private boolean verifySignature(String signingInput, String signaturePart) {
+        try {
+            byte[] signatureBytes = Base64.getUrlDecoder().decode(signaturePart);
+            Signature verifier = Signature.getInstance("SHA256withRSA");
+            verifier.initVerify(signingKeyProvider.publicKey());
+            verifier.update(signingInput.getBytes(StandardCharsets.UTF_8));
+            return verifier.verify(signatureBytes);
+        } catch (Exception exception) {
+            return false;
+        }
     }
 
     private static final class TokenValidationException extends RuntimeException {

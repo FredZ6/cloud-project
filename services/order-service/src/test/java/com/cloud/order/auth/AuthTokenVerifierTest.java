@@ -6,9 +6,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.Signature;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
@@ -20,11 +23,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AuthTokenVerifierTest {
 
     private AuthTokenVerifier verifier;
+    private RSAPrivateKey privateKey;
 
     @BeforeEach
-    void setUp() {
-        verifier = new AuthTokenVerifier(new ObjectMapper());
-        ReflectionTestUtils.setField(verifier, "tokenSecret", "test-secret");
+    void setUp() throws Exception {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+        privateKey = (RSAPrivateKey) keyPair.getPrivate();
+        RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
+
+        verifier = new AuthTokenVerifier(new ObjectMapper(), keyId -> publicKey);
+        ReflectionTestUtils.setField(verifier, "expectedIssuer", "auth-service");
     }
 
     @Test
@@ -61,18 +71,23 @@ class AuthTokenVerifierTest {
         }
         rolesJson.append(']');
 
-        String payload = "{\"user_id\":\"" + userId + "\",\"roles\":" + rolesJson + ",\"exp\":" + expiresAt.getEpochSecond() + "}";
+        String header = "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"test-key\"}";
+        String payload = "{\"sub\":\"" + userId + "\",\"roles\":" + rolesJson + ",\"iss\":\"auth-service\",\"exp\":" + expiresAt.getEpochSecond() + "}";
+
+        String headerPart = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8));
         String payloadPart = Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
-        String signaturePart = sign(payloadPart);
-        return payloadPart + "." + signaturePart;
+        String signingInput = headerPart + "." + payloadPart;
+        String signaturePart = sign(signingInput);
+        return signingInput + "." + signaturePart;
     }
 
-    private String sign(String payloadPart) {
+    private String sign(String signingInput) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec("test-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] signature = mac.doFinal(payloadPart.getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(signature);
+            Signature signature = Signature.getInstance("SHA256withRSA");
+            signature.initSign(privateKey);
+            signature.update(signingInput.getBytes(StandardCharsets.UTF_8));
+            byte[] signed = signature.sign();
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(signed);
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
         }

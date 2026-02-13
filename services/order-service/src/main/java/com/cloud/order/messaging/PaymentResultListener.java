@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.MDC;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -30,22 +31,34 @@ public class PaymentResultListener {
         String raw = new String(message.getBody(), StandardCharsets.UTF_8);
         JsonNode root = parseRoot(raw);
         String eventType = root.path("event_type").asText();
+        bindTraceToMdc(root.path("trace_id").asText(null));
 
-        if ("PaymentSucceeded".equals(eventType)) {
-            EventEnvelope<PaymentSucceededData> envelope = parseSucceeded(raw);
-            String messageId = resolveMessageId(message, envelope.eventId());
-            orderStatusUpdateService.markPaymentSucceeded(messageId, envelope.data().orderId());
-            return;
-        }
+        try {
+            if ("PaymentSucceeded".equals(eventType)) {
+                EventEnvelope<PaymentSucceededData> envelope = parseSucceeded(raw);
+                String messageId = resolveMessageId(message, envelope.eventId());
+                orderStatusUpdateService.markPaymentSucceeded(messageId, envelope.data().orderId());
+                return;
+            }
 
-        if ("PaymentFailed".equals(eventType)) {
-            EventEnvelope<PaymentFailedData> envelope = parseFailed(raw);
-            String messageId = resolveMessageId(message, envelope.eventId());
-            orderStatusUpdateService.markPaymentFailed(messageId, envelope.data().orderId(), envelope.traceId(), envelope.identity());
-            return;
+            if ("PaymentFailed".equals(eventType)) {
+                EventEnvelope<PaymentFailedData> envelope = parseFailed(raw);
+                String messageId = resolveMessageId(message, envelope.eventId());
+                orderStatusUpdateService.markPaymentFailed(messageId, envelope.data().orderId(), envelope.traceId(), envelope.identity());
+                return;
+            }
+        } finally {
+            MDC.remove("trace_id");
         }
 
         throw new AmqpRejectAndDontRequeueException("Unsupported payment event type: " + eventType);
+    }
+
+    private void bindTraceToMdc(String traceId) {
+        if (traceId == null || traceId.isBlank()) {
+            return;
+        }
+        MDC.put("trace_id", traceId.trim());
     }
 
     private JsonNode parseRoot(String raw) {

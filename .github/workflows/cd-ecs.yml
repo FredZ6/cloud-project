@@ -1,0 +1,237 @@
+name: CD-ECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_env:
+        description: "Target environment name (example: dev/staging/prod)"
+        required: false
+        default: "dev"
+      image_tag:
+        description: "Image tag to publish (default: github sha)"
+        required: false
+      terraform_apply:
+        description: "Apply Terraform changes before ECS deploy"
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - "Dockerfile"
+      - "services/**"
+      - "scripts/build-service-image.sh"
+      - "infra/terraform/**"
+      - ".github/workflows/cd-ecs.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: cd-ecs-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  PROJECT_NAME: ${{ vars.PROJECT_NAME || 'cloud-order-platform' }}
+  DEFAULT_DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'dev' }}
+  ECS_CLUSTER_NAME_OVERRIDE: ${{ vars.ECS_CLUSTER_NAME }}
+  TF_AUTO_APPLY: ${{ vars.TF_AUTO_APPLY || 'false' }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
+  TF_STATE_KEY_PREFIX: ${{ vars.TF_STATE_KEY_PREFIX }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.5
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve deployment metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_env="$(jq -r '.inputs.deploy_env // empty' "${GITHUB_EVENT_PATH}")"
+          if [[ -z "${deploy_env}" ]]; then
+            deploy_env="${DEFAULT_DEPLOY_ENV}"
+          fi
+
+          image_tag="$(jq -r '.inputs.image_tag // empty' "${GITHUB_EVENT_PATH}")"
+          if [[ -z "${image_tag}" ]]; then
+            image_tag="${GITHUB_SHA}"
+          fi
+
+          input_apply="$(jq -r '.inputs.terraform_apply // empty' "${GITHUB_EVENT_PATH}")"
+          auto_apply="false"
+          if [[ "${input_apply}" == "true" || "${TF_AUTO_APPLY}" == "true" ]]; then
+            auto_apply="true"
+          fi
+
+          if [[ -n "${ECS_CLUSTER_NAME_OVERRIDE}" ]]; then
+            cluster_name="${ECS_CLUSTER_NAME_OVERRIDE}"
+          else
+            cluster_name="${PROJECT_NAME}-${deploy_env}-cluster"
+          fi
+
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+
+          state_lock_table="${TF_STATE_LOCK_TABLE}"
+          if [[ -z "${state_lock_table}" ]]; then
+            state_lock_table="${PROJECT_NAME}-${deploy_env}-tf-locks"
+          fi
+
+          if [[ -n "${TF_STATE_KEY_PREFIX}" ]]; then
+            tf_state_key="${TF_STATE_KEY_PREFIX}/${PROJECT_NAME}/${deploy_env}/aws.tfstate"
+          else
+            tf_state_key="${PROJECT_NAME}/${deploy_env}/aws.tfstate"
+          fi
+
+          echo "deploy_env=${deploy_env}" >> "${GITHUB_OUTPUT}"
+          echo "image_tag=${image_tag}" >> "${GITHUB_OUTPUT}"
+          echo "auto_apply=${auto_apply}" >> "${GITHUB_OUTPUT}"
+          echo "cluster_name=${cluster_name}" >> "${GITHUB_OUTPUT}"
+          echo "account_id=${account_id}" >> "${GITHUB_OUTPUT}"
+          echo "state_lock_table=${state_lock_table}" >> "${GITHUB_OUTPUT}"
+          echo "tf_state_key=${tf_state_key}" >> "${GITHUB_OUTPUT}"
+
+      - name: Terraform init/validate/plan gate
+        id: tfplan
+        shell: bash
+        env:
+          DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
+          TF_STATE_KEY: ${{ steps.meta.outputs.tf_state_key }}
+          STATE_LOCK_TABLE: ${{ steps.meta.outputs.state_lock_table }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TF_STATE_BUCKET}" ]]; then
+            echo "::error::Missing GitHub variable TF_STATE_BUCKET."
+            exit 1
+          fi
+
+          if [[ -z "${STATE_LOCK_TABLE}" ]]; then
+            echo "::error::Missing lock table name for Terraform backend."
+            exit 1
+          fi
+
+          terraform -chdir=infra/terraform/aws init -input=false -reconfigure \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=${TF_STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${STATE_LOCK_TABLE}" \
+            -backend-config="encrypt=true"
+
+          terraform -chdir=infra/terraform/aws validate -no-color
+
+          set +e
+          terraform -chdir=infra/terraform/aws plan -input=false -no-color -detailed-exitcode -out=tfplan \
+            -var="environment=${DEPLOY_ENV}" \
+            -var="project_name=${PROJECT_NAME}"
+          plan_exit=$?
+          set -e
+
+          if [[ ${plan_exit} -eq 0 ]]; then
+            echo "has_changes=false" >> "${GITHUB_OUTPUT}"
+          elif [[ ${plan_exit} -eq 2 ]]; then
+            echo "has_changes=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::error::terraform plan failed with exit code ${plan_exit}"
+            exit ${plan_exit}
+          fi
+
+      - name: Terraform apply (optional gate)
+        if: ${{ steps.tfplan.outputs.has_changes == 'true' && steps.meta.outputs.auto_apply == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/terraform/aws apply -input=false -auto-approve tfplan
+
+      - name: Enforce Terraform gate before deploy
+        if: ${{ steps.tfplan.outputs.has_changes == 'true' && steps.meta.outputs.auto_apply != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::error::Terraform plan has unapplied changes. Re-run with workflow input terraform_apply=true or set TF_AUTO_APPLY=true."
+          exit 1
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push service images
+        shell: bash
+        env:
+          ACCOUNT_ID: ${{ steps.meta.outputs.account_id }}
+          DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          services=(
+            auth-service
+            catalog-service
+            order-service
+            inventory-service
+            payment-service
+            notification-service
+          )
+
+          for service in "${services[@]}"; do
+            repo="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-${DEPLOY_ENV}/${service}"
+            echo "Building ${service} -> ${repo}:${IMAGE_TAG}"
+            docker build \
+              --build-arg SERVICE_MODULE="${service}" \
+              -t "${repo}:${IMAGE_TAG}" \
+              -t "${repo}:latest" \
+              -f Dockerfile \
+              .
+            docker push "${repo}:${IMAGE_TAG}"
+            docker push "${repo}:latest"
+          done
+
+      - name: Trigger ECS rolling deployment
+        shell: bash
+        env:
+          DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
+          CLUSTER_NAME: ${{ steps.meta.outputs.cluster_name }}
+        run: |
+          set -euo pipefail
+
+          services=(
+            auth-service
+            catalog-service
+            order-service
+            inventory-service
+            payment-service
+            notification-service
+          )
+
+          for service in "${services[@]}"; do
+            ecs_service="${PROJECT_NAME}-${DEPLOY_ENV}-${service}"
+            echo "Deploying ${ecs_service} on cluster ${CLUSTER_NAME}"
+            aws ecs update-service \
+              --cluster "${CLUSTER_NAME}" \
+              --service "${ecs_service}" \
+              --force-new-deployment \
+              >/dev/null
+            aws ecs wait services-stable \
+              --cluster "${CLUSTER_NAME}" \
+              --services "${ecs_service}"
+          done

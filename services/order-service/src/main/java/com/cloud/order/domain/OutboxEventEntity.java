@@ -64,6 +64,10 @@ public class OutboxEventEntity {
         return id;
     }
 
+    public String getEventType() {
+        return eventType;
+    }
+
     public String getRoutingKey() {
         return routingKey;
     }

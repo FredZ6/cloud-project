@@ -12,7 +12,7 @@ Example:
 Notes:
   - The target branch must already exist on GitHub.
   - The token needs repository administration permission.
-  - Required checks are set to: quick-check, integration-tests.
+  - Required checks are set to: quick-check, integration-tests, openapi-check.
 USAGE
 }
 
@@ -50,7 +50,8 @@ read -r -d '' payload <<'JSON' || true
     "strict": true,
     "checks": [
       { "context": "quick-check" },
-      { "context": "integration-tests" }
+      { "context": "integration-tests" },
+      { "context": "openapi-check" }
     ]
   },
   "enforce_admins": true,
@@ -88,4 +89,4 @@ if [[ "${http_code}" != "200" ]]; then
 fi
 
 echo "Branch protection applied successfully."
-echo "Required checks: quick-check, integration-tests"
+echo "Required checks: quick-check, integration-tests, openapi-check"

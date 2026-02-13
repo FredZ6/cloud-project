@@ -1,5 +1,6 @@
 .idea/
 .vscode/
+.worktrees/
 *.iml
 *.log
 .DS_Store
@@ -7,3 +8,8 @@
 **/target/
 **/.mvn/
 **/.gradle/
+infra/terraform/**/*.tfstate
+infra/terraform/**/*.tfstate.*
+infra/terraform/**/.terraform/
+infra/terraform/**/terraform.tfvars
+infra/terraform/**/backend.hcl

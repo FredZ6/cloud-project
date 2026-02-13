@@ -1,5 +1,6 @@
 package com.cloud.inventory.service;
 
+import com.cloud.inventory.cache.InventoryStockCacheService;
 import com.cloud.inventory.domain.InventoryReservationEntity;
 import com.cloud.inventory.domain.InventoryReservationItemEntity;
 import com.cloud.inventory.domain.InventoryReleaseEventEntity;
@@ -29,19 +30,22 @@ public class InventoryReservationService {
     private final SkuStockRepository skuStockRepository;
     private final InventoryReservationRepository reservationRepository;
     private final InventoryReleaseEventRepository inventoryReleaseEventRepository;
+    private final InventoryStockCacheService stockCacheService;
 
     public InventoryReservationService(SkuStockRepository skuStockRepository,
                                        InventoryReservationRepository reservationRepository,
-                                       InventoryReleaseEventRepository inventoryReleaseEventRepository) {
+                                       InventoryReleaseEventRepository inventoryReleaseEventRepository,
+                                       InventoryStockCacheService stockCacheService) {
         this.skuStockRepository = skuStockRepository;
         this.reservationRepository = reservationRepository;
         this.inventoryReleaseEventRepository = inventoryReleaseEventRepository;
+        this.stockCacheService = stockCacheService;
     }
 
     @Transactional
     public SkuStockEntity upsertStock(String skuId, int availableQty) {
         String normalizedSkuId = normalizeSkuId(skuId);
-        return skuStockRepository.findById(normalizedSkuId)
+        SkuStockEntity stock = skuStockRepository.findById(normalizedSkuId)
                 .map(existing -> {
                     existing.setAvailableQty(availableQty);
                     return existing;
@@ -52,13 +56,22 @@ public class InventoryReservationService {
                         0,
                         Instant.now()
                 )));
+        stockCacheService.put(stock);
+        return stock;
     }
 
     @Transactional(readOnly = true)
     public SkuStockEntity getStock(String skuId) {
         String normalizedSkuId = normalizeSkuId(skuId);
-        return skuStockRepository.findById(normalizedSkuId)
+        Optional<SkuStockEntity> cached = stockCacheService.get(normalizedSkuId);
+        if (cached.isPresent()) {
+            return cached.get();
+        }
+
+        SkuStockEntity stock = skuStockRepository.findById(normalizedSkuId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stock not found for sku: " + normalizedSkuId));
+        stockCacheService.put(stock);
+        return stock;
     }
 
     @Transactional
@@ -98,6 +111,7 @@ public class InventoryReservationService {
             }
             stock.release(item.getQuantity());
         }
+        stockCacheService.evictAll(skuIds);
 
         Instant releasedAt = Instant.now();
         reservation.markReleased(reason);
@@ -164,6 +178,7 @@ public class InventoryReservationService {
         }
 
         InventoryReservationEntity saved = reservationRepository.save(reservation);
+        stockCacheService.evictAll(skuIds);
         return toOutcome(saved);
     }
 

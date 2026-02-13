@@ -1,0 +1,57 @@
+aws_region   = "us-east-1"
+environment  = "dev"
+project_name = "cloud-order-platform"
+
+# External dependencies (replace with your real endpoints).
+postgres_host = "your-postgres-hostname"
+postgres_port = 5432
+
+rabbitmq_host = "your-rabbitmq-hostname"
+rabbitmq_port = 5672
+
+redis_host = "your-redis-hostname"
+redis_port = 6379
+
+# Optional observability endpoint.
+otel_exporter_otlp_endpoint = "https://your-otel-collector/v1/traces"
+
+# Safe bootstrap: keep services at 0 until images are pushed.
+ecs_desired_count_by_service = {
+  auth-service         = 0
+  catalog-service      = 0
+  order-service        = 0
+  inventory-service    = 0
+  payment-service      = 0
+  notification-service = 0
+}
+
+# Optional per-service image overrides.
+# service_image_overrides = {
+#   order-service = "123456789012.dkr.ecr.us-east-1.amazonaws.com/cloud-order-platform-dev/order-service:latest"
+# }
+
+# Optional custom env values injected into container definitions.
+# environment_variables_by_service = {
+#   payment-service = {
+#     PAYMENT_MOCK_MODE = "SUCCESS"
+#   }
+# }
+
+# Optional: inject secrets into ECS container env (valueFrom supports
+# Secrets Manager and SSM references accepted by ECS).
+# secret_environment_by_service = {
+#   order-service = {
+#     ORDER_DB_PASSWORD = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloud/dev/order-db-AbCdEf:password::"
+#   }
+#   inventory-service = {
+#     INVENTORY_DB_PASSWORD = "arn:aws:ssm:us-east-1:123456789012:parameter/cloud/dev/inventory-db-password"
+#   }
+# }
+
+# Grant ECS execution role permission to read these secret backends.
+# task_execution_secret_arns = [
+#   "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloud/dev/order-db-AbCdEf"
+# ]
+# task_execution_ssm_parameter_arns = [
+#   "arn:aws:ssm:us-east-1:123456789012:parameter/cloud/dev/inventory-db-password"
+# ]

@@ -1,0 +1,156 @@
+{
+    "metrics": {
+        "http_req_duration{expected_response:true}": {
+            "avg": 7.700917781331045,
+            "min": 0.611083,
+            "med": 7.090458,
+            "max": 182.40875,
+            "p(90)": 12.716334,
+            "p(95)": 14.882478999999996
+        },
+        "checks": {
+            "passes": 65541,
+            "fails": 0,
+            "value": 1
+        },
+        "iteration_duration": {
+            "max": 161.158667,
+            "p(90)": 114.85485,
+            "p(95)": 117.1698792,
+            "avg": 109.47336805413457,
+            "min": 100.885208,
+            "med": 108.882229
+        },
+        "vus_max": {
+            "min": 60,
+            "max": 60,
+            "value": 60
+        },
+        "http_req_connecting": {
+            "avg": 0.03069909004912882,
+            "min": 0,
+            "med": 0,
+            "max": 11.538709,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "vus": {
+            "value": 1,
+            "min": 1,
+            "max": 59
+        },
+        "data_sent": {
+            "count": 3408268,
+            "rate": 28345.608423478454
+        },
+        "data_received": {
+            "count": 9083210,
+            "rate": 75542.50836149731
+        },
+        "http_reqs": {
+            "count": 32771,
+            "rate": 272.5472097985876
+        },
+        "iterations": {
+            "count": 32770,
+            "rate": 272.53889307923816
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 32771,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_tls_handshaking": {
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0
+        },
+        "http_req_duration": {
+            "p(95)": 14.882478999999996,
+            "avg": 7.700917781331045,
+            "min": 0.611083,
+            "med": 7.090458,
+            "max": 182.40875,
+            "p(90)": 12.716334,
+            "thresholds": {
+                "p(95)<250": false
+            }
+        },
+        "http_req_blocked": {
+            "avg": 0.04050514760001284,
+            "min": 0.000792,
+            "med": 0.004458,
+            "max": 11.61775,
+            "p(90)": 0.011042,
+            "p(95)": 0.0175835
+        },
+        "http_req_receiving": {
+            "med": 0.032083,
+            "max": 6.032959,
+            "p(90)": 0.118125,
+            "p(95)": 0.22435399999999958,
+            "avg": 0.06766762945897262,
+            "min": 0.005
+        },
+        "http_req_sending": {
+            "p(90)": 0.040084,
+            "p(95)": 0.07197899999999993,
+            "avg": 0.029153596625064913,
+            "min": 0.002083,
+            "med": 0.010958,
+            "max": 15.171583
+        },
+        "http_req_waiting": {
+            "avg": 7.604096555247022,
+            "min": 0.597916,
+            "med": 7.001167,
+            "max": 181.723,
+            "p(90)": 12.599583,
+            "p(95)": 14.768062499999997
+        }
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "name": "setup",
+                "path": "::setup",
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {
+                        "seed stock success": {
+                            "path": "::setup::seed stock success",
+                            "id": "bf7dcaf911cd2825f26f3a7d8207f4a7",
+                            "passes": 1,
+                            "fails": 0,
+                            "name": "seed stock success"
+                        }
+                    }
+            }
+        },
+        "checks": {
+            "stock read success": {
+                "fails": 0,
+                "name": "stock read success",
+                "path": "::stock read success",
+                "id": "02a3c10fbf4cce02b55a38f983e09dc9",
+                "passes": 32770
+            },
+            "stock has availableQty": {
+                "id": "0e94afc8dc36fe3bd59172f0c0795368",
+                "passes": 32770,
+                "fails": 0,
+                "name": "stock has availableQty",
+                "path": "::stock has availableQty"
+            }
+        }
+    }
+}
