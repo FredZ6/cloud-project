@@ -191,12 +191,60 @@ cd /Users/fredz/Documents/New\ project/cloud-order-platform
 k6 run scripts/perf/k6-inventory-stock-read.js
 ```
 
+If `k6` is not installed, run it via Docker:
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+docker run --rm -i -v "$(pwd)":/work -w /work \
+  -e INVENTORY_BASE_URL=http://host.docker.internal:8082 \
+  grafana/k6:latest run scripts/perf/k6-inventory-stock-read.js
+```
+
 Optional:
 
 ```bash
 INVENTORY_BASE_URL=http://localhost:8082 SKU_ID=SKU-PERF-001 \
   k6 run scripts/perf/k6-inventory-stock-read.js
 ```
+
+### Release Events Pagination Benchmark (Offset vs Cursor)
+
+Seed a dataset:
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+./scripts/perf/seed-release-events.sh 200000
+```
+
+Generate `EXPLAIN (ANALYZE, BUFFERS)` evidence (page-size `20`, deep offset `page=5000`):
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+DEEP_PAGE=5000 ./scripts/perf/explain-release-events.sh
+```
+
+Run the k6 scenarios via Docker (recommended):
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+
+docker run --rm -i -v "$(pwd)":/work -w /work \
+  -e INVENTORY_BASE_URL=http://host.docker.internal:8082 \
+  -e MODE=offset_shallow \
+  grafana/k6:latest run scripts/perf/k6-inventory-release-events.js
+
+docker run --rm -i -v "$(pwd)":/work -w /work \
+  -e INVENTORY_BASE_URL=http://host.docker.internal:8082 \
+  -e MODE=offset_deep -e DEEP_PAGE=5000 \
+  grafana/k6:latest run scripts/perf/k6-inventory-release-events.js
+
+docker run --rm -i -v "$(pwd)":/work -w /work \
+  -e INVENTORY_BASE_URL=http://host.docker.internal:8082 \
+  -e MODE=cursor_paging \
+  grafana/k6:latest run scripts/perf/k6-inventory-release-events.js
+```
+
+See `docs/reports/release-events-pagination-benchmark.md` for a summary and evidence file list.
 
 ## Observability Stack Checks
 

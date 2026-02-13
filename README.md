@@ -257,6 +257,16 @@ Query release audit records (after a compensation flow):
 curl -i "http://localhost:8082/api/stocks/release-events?page=0&size=20"
 ```
 
+Query release audit records via cursor pagination (stable for deep paging):
+
+```bash
+# page 1
+curl -i "http://localhost:8082/api/stocks/release-events/cursor?limit=20"
+
+# page 2 (use nextCursor from the previous response)
+curl -i "http://localhost:8082/api/stocks/release-events/cursor?limit=20&cursor=<nextCursor>"
+```
+
 Export release audit records as CSV:
 
 ```bash
