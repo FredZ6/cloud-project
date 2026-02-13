@@ -118,6 +118,38 @@ public class StockController {
         );
     }
 
+    @GetMapping("/release-events/cursor")
+    @Operation(summary = "Query inventory release audit events (cursor pagination)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Cursor page returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid query parameters")
+    })
+    public InventoryReleaseEventCursorPageResponse listReleaseEventsCursor(
+            @Parameter(description = "Filter by order ID")
+            @RequestParam(value = "orderId", required = false) UUID orderId,
+            @Parameter(description = "Filter from timestamp (ISO-8601)")
+            @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @Parameter(description = "Filter to timestamp (ISO-8601)")
+            @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @Parameter(description = "Page size (1-100)")
+            @RequestParam(value = "size", defaultValue = "20") @Min(1) @Max(100) int size,
+            @Parameter(description = "Cursor to fetch results after the previous page")
+            @RequestParam(value = "after", required = false) String after
+    ) {
+        var result = releaseAuditService.listReleaseEventsCursor(orderId, from, to, size, after);
+        List<InventoryReleaseEventResponse> items = result.items().stream()
+                .map(event -> new InventoryReleaseEventResponse(
+                        event.getId(),
+                        event.getOrderId(),
+                        event.getReservationId(),
+                        event.getReason(),
+                        event.getCreatedAt()
+                ))
+                .toList();
+
+        return new InventoryReleaseEventCursorPageResponse(items, size, result.hasMore(), result.nextCursor());
+    }
+
     @GetMapping(value = "/release-events/export", produces = "text/csv")
     @Operation(summary = "Export inventory release audit events as CSV")
     @ApiResponses({
