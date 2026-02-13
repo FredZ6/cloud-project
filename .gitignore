@@ -1,5 +1,6 @@
 .idea/
 .vscode/
+.worktrees/
 *.iml
 *.log
 .DS_Store
