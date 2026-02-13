@@ -9,8 +9,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.server.ResponseStatusException;
@@ -23,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,11 +69,12 @@ class InventoryReleaseAuditServiceCursorTest {
                 Instant.parse("2026-02-11T09:59:59Z")
         );
 
-        when(inventoryReleaseEventRepository.findAll(
+        when(inventoryReleaseEventRepository.findCursorPage(
                 ArgumentMatchers.<Specification<InventoryReleaseEventEntity>>any(),
-                any(Pageable.class)
+                any(Sort.class),
+                eq(size + 1)
         ))
-                .thenReturn(new PageImpl<>(List.of(e1, e2, extra)));
+                .thenReturn(List.of(e1, e2, extra));
 
         var page = inventoryReleaseAuditService.listReleaseEventsCursor(null, null, null, size, null);
 
@@ -82,17 +82,15 @@ class InventoryReleaseAuditServiceCursorTest {
         assertTrue(page.hasMore());
         assertEquals(ReleaseEventsCursor.encode(e2.getCreatedAt(), e2.getId()), page.nextCursor());
 
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(inventoryReleaseEventRepository).findAll(
+        ArgumentCaptor<Sort> sortCaptor = ArgumentCaptor.forClass(Sort.class);
+        verify(inventoryReleaseEventRepository).findCursorPage(
                 ArgumentMatchers.<Specification<InventoryReleaseEventEntity>>any(),
-                pageableCaptor.capture()
+                sortCaptor.capture(),
+                eq(size + 1)
         );
 
-        Pageable pageable = pageableCaptor.getValue();
-        assertEquals(0, pageable.getPageNumber());
-        assertEquals(size + 1, pageable.getPageSize());
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("createdAt").getDirection());
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
+        Sort sort = sortCaptor.getValue();
+        assertEquals(Sort.Direction.DESC, sort.getOrderFor("createdAt").getDirection());
+        assertEquals(Sort.Direction.DESC, sort.getOrderFor("id").getDirection());
     }
 }
-

@@ -49,16 +49,12 @@ public class InventoryReleaseAuditService {
             spec = spec.and(buildAfterSpec(decoded));
         }
 
-        Page<InventoryReleaseEventEntity> page = inventoryReleaseEventRepository.findAll(
+        List<InventoryReleaseEventEntity> content = inventoryReleaseEventRepository.findCursorPage(
                 spec,
-                PageRequest.of(
-                        0,
-                        size + 1,
-                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
-                )
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")),
+                size + 1
         );
 
-        List<InventoryReleaseEventEntity> content = page.getContent();
         boolean hasMore = content.size() > size;
         List<InventoryReleaseEventEntity> items = hasMore ? content.subList(0, size) : content;
 

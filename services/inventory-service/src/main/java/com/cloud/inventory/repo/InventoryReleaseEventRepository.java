@@ -7,5 +7,6 @@ import java.util.UUID;
 
 public interface InventoryReleaseEventRepository extends
         JpaRepository<InventoryReleaseEventEntity, UUID>,
-        JpaSpecificationExecutor<InventoryReleaseEventEntity> {
+        JpaSpecificationExecutor<InventoryReleaseEventEntity>,
+        InventoryReleaseEventRepositoryCustom {
 }
