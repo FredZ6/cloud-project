@@ -4,6 +4,7 @@ import com.cloud.inventory.domain.InventoryReleaseEventEntity;
 import com.cloud.inventory.repo.InventoryReleaseEventRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -24,10 +26,49 @@ public class InventoryReleaseAuditService {
         this.inventoryReleaseEventRepository = inventoryReleaseEventRepository;
     }
 
+    public record ReleaseEventsCursorPage(
+            List<InventoryReleaseEventEntity> items,
+            boolean hasMore,
+            String nextCursor
+    ) {
+    }
+
     @Transactional(readOnly = true)
     public Page<InventoryReleaseEventEntity> listReleaseEvents(UUID orderId, Instant from, Instant to, int page, int size) {
         validateTimeRange(from, to);
         return inventoryReleaseEventRepository.findAll(buildSpec(orderId, from, to), PageRequest.of(page, size));
+    }
+
+    @Transactional(readOnly = true)
+    public ReleaseEventsCursorPage listReleaseEventsCursor(UUID orderId, Instant from, Instant to, int size, String after) {
+        validateTimeRange(from, to);
+
+        Specification<InventoryReleaseEventEntity> spec = buildSpec(orderId, from, to);
+        if (after != null && !after.isBlank()) {
+            ReleaseEventsCursor.Decoded decoded = ReleaseEventsCursor.decode(after);
+            spec = spec.and(buildAfterSpec(decoded));
+        }
+
+        Page<InventoryReleaseEventEntity> page = inventoryReleaseEventRepository.findAll(
+                spec,
+                PageRequest.of(
+                        0,
+                        size + 1,
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))
+                )
+        );
+
+        List<InventoryReleaseEventEntity> content = page.getContent();
+        boolean hasMore = content.size() > size;
+        List<InventoryReleaseEventEntity> items = hasMore ? content.subList(0, size) : content;
+
+        String nextCursor = null;
+        if (hasMore && !items.isEmpty()) {
+            InventoryReleaseEventEntity last = items.get(items.size() - 1);
+            nextCursor = ReleaseEventsCursor.encode(last.getCreatedAt(), last.getId());
+        }
+
+        return new ReleaseEventsCursorPage(List.copyOf(items), hasMore, nextCursor);
     }
 
     @Transactional(readOnly = true)
@@ -62,6 +103,16 @@ public class InventoryReleaseAuditService {
         if (from != null && to != null && from.isAfter(to)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be <= to");
         }
+    }
+
+    private Specification<InventoryReleaseEventEntity> buildAfterSpec(ReleaseEventsCursor.Decoded after) {
+        return (root, query, cb) -> cb.or(
+                cb.lessThan(root.get("createdAt"), after.createdAt()),
+                cb.and(
+                        cb.equal(root.get("createdAt"), after.createdAt()),
+                        cb.lessThan(root.get("id"), after.id())
+                )
+        );
     }
 
     private Specification<InventoryReleaseEventEntity> buildSpec(UUID orderId, Instant from, Instant to) {
