@@ -27,16 +27,13 @@ output "ecr_repository_urls" {
 }
 
 output "alb_dns_name" {
-  description = "Public ALB DNS name."
-  value       = aws_lb.public.dns_name
+  description = "Public ALB DNS name (null when ALB disabled)."
+  value       = var.enable_public_alb ? aws_lb.public[0].dns_name : null
 }
 
 output "public_service_target_groups" {
-  description = "ALB target group ARNs for public services."
-  value = {
-    for service, tg in aws_lb_target_group.service :
-    service => tg.arn
-  }
+  description = "ALB target group ARNs for public services (empty when ALB disabled)."
+  value       = var.enable_public_alb ? { for service, tg in aws_lb_target_group.service : service => tg.arn } : {}
 }
 
 output "ecs_service_names" {

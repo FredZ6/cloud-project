@@ -78,7 +78,12 @@ locals {
     )
   }
 
-  auth_jwks_uri = "http://${aws_lb.public.dns_name}/.well-known/jwks.json"
+  service_discovery_namespace = aws_service_discovery_private_dns_namespace.main.name
+  auth_internal_base_url      = "http://auth-service.${local.service_discovery_namespace}:8084"
+
+  auth_jwks_uri = var.enable_public_alb
+    ? "http://${aws_lb.public[0].dns_name}/.well-known/jwks.json"
+    : "${local.auth_internal_base_url}/.well-known/jwks.json"
 
   base_environment_by_service = {
     auth-service = merge(
@@ -188,6 +193,8 @@ locals {
 }
 
 resource "aws_security_group" "alb" {
+  count = var.enable_public_alb ? 1 : 0
+
   name        = "${local.name_prefix}-alb-sg"
   description = "Ingress security group for public ALB."
   vpc_id      = aws_vpc.main.id
@@ -232,22 +239,24 @@ resource "aws_security_group" "ecs_tasks" {
 }
 
 resource "aws_security_group_rule" "ecs_from_alb" {
-  for_each = local.public_service_definitions
+  for_each = var.enable_public_alb ? local.public_service_definitions : {}
 
   type                     = "ingress"
   security_group_id        = aws_security_group.ecs_tasks.id
   from_port                = each.value.port
   to_port                  = each.value.port
   protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
+  source_security_group_id = aws_security_group.alb[0].id
   description              = "Allow ALB to access ${each.key}."
 }
 
 resource "aws_lb" "public" {
+  count = var.enable_public_alb ? 1 : 0
+
   name               = trimsuffix(substr("${local.name_prefix}-alb", 0, 32), "-")
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
+  security_groups    = [aws_security_group.alb[0].id]
   subnets            = local.public_subnet_ids
 
   tags = merge(local.common_tags, {
@@ -256,7 +265,7 @@ resource "aws_lb" "public" {
 }
 
 resource "aws_lb_target_group" "service" {
-  for_each = local.public_service_definitions
+  for_each = var.enable_public_alb ? local.public_service_definitions : {}
 
   name        = trimsuffix(substr("${var.environment}-${replace(each.key, "service", "svc")}", 0, 32), "-")
   port        = each.value.port
@@ -281,7 +290,9 @@ resource "aws_lb_target_group" "service" {
 }
 
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.public.arn
+  count = var.enable_public_alb ? 1 : 0
+
+  load_balancer_arn = aws_lb.public[0].arn
   port              = 80
   protocol          = "HTTP"
 
@@ -297,9 +308,9 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_lb_listener_rule" "service" {
-  for_each = local.public_service_definitions
+  for_each = var.enable_public_alb ? local.public_service_definitions : {}
 
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.http[0].arn
   priority     = each.value.listener_priority
 
   action {
@@ -472,7 +483,7 @@ resource "aws_ecs_service" "service" {
   }
 
   dynamic "load_balancer" {
-    for_each = each.value.expose_public ? [1] : []
+    for_each = (var.enable_public_alb && each.value.expose_public) ? [1] : []
     iterator = lb
 
     content {
@@ -482,9 +493,7 @@ resource "aws_ecs_service" "service" {
     }
   }
 
-  depends_on = [
-    aws_lb_listener_rule.service
-  ]
+  depends_on = var.enable_public_alb ? [aws_lb_listener_rule.service] : []
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-${each.key}-service"
