@@ -516,9 +516,7 @@ resource "aws_ecs_service" "service" {
   }
 
   service_registries {
-    registry_arn   = aws_service_discovery_service.microservice[each.key].arn
-    container_name = each.key
-    container_port = each.value.port
+    registry_arn = aws_service_discovery_service.microservice[each.key].arn
   }
 
   dynamic "load_balancer" {

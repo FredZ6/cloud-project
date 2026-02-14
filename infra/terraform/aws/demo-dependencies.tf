@@ -135,13 +135,10 @@ resource "aws_ecs_service" "demo_dependency" {
   }
 
   service_registries {
-    registry_arn   = aws_service_discovery_service.demo_dependency[each.key].arn
-    container_name = each.key
-    container_port = each.value.port
+    registry_arn = aws_service_discovery_service.demo_dependency[each.key].arn
   }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-${each.key}-service"
   })
 }
-
