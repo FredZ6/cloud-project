@@ -65,10 +65,22 @@ variable "service_image_overrides" {
   default     = {}
 }
 
+variable "enable_public_alb" {
+  description = "When true, provision the public ALB and attach public services to it."
+  type        = bool
+  default     = true
+}
+
 variable "alb_ingress_cidr_blocks" {
   description = "CIDR blocks allowed to access the public ALB."
   type        = list(string)
   default     = ["0.0.0.0/0"]
+}
+
+variable "public_task_ingress_cidr_blocks" {
+  description = "When enable_public_alb=false, allow inbound access to public service ports from these CIDRs (use <your-ip>/32). Empty list keeps services private."
+  type        = list(string)
+  default     = []
 }
 
 variable "ecs_desired_count_by_service" {
@@ -114,6 +126,12 @@ variable "postgres_host" {
   description = "PostgreSQL host used by order/inventory/payment services."
   type        = string
   default     = "localhost"
+}
+
+variable "enable_demo_dependencies" {
+  description = "When true, provision demo RabbitMQ/Redis/Postgres services in ECS and wire microservices to them (demo-only, no persistence)."
+  type        = bool
+  default     = false
 }
 
 variable "postgres_port" {
