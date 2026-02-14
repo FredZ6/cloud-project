@@ -66,6 +66,10 @@ Edit `terraform.tfvars`:
 
 - `postgres_host`, `rabbitmq_host`, `redis_host` must point to reachable endpoints.
 - Keep `ecs_desired_count_by_service` at `0` for the first apply (safe bootstrap).
+- If your AWS account cannot create load balancers, set:
+  - `enable_public_alb = false`
+  - `public_task_ingress_cidr_blocks = ["<your-ip>/32"]` (optional; enables direct access via task public IP)
+- Optional demo mode (no persistence): `enable_demo_dependencies = true` to provision RabbitMQ/Redis/Postgres inside ECS.
 
 Run:
 
@@ -82,6 +86,8 @@ terraform output ecs_cluster_name
 terraform output alb_dns_name
 terraform output -json ecr_repository_urls
 ```
+
+When `enable_public_alb=false`, `alb_dns_name` will be `null`. Use ECS task public IPs to access services.
 
 ## 4) Build and push images
 
@@ -203,6 +209,7 @@ Required GitHub settings:
   - `AWS_REGION` (example `us-east-1`)
   - `PROJECT_NAME` (default `cloud-order-platform`)
   - `DEPLOY_ENV` (default `dev`)
+  - `ENABLE_PUBLIC_ALB` (`true|false`, optional; default `true`)
   - `ECS_CLUSTER_NAME` (optional override; otherwise `<project>-<env>-cluster`)
   - `TF_STATE_BUCKET` (remote state S3 bucket name)
   - `TF_STATE_LOCK_TABLE` (optional; default `<project>-<env>-tf-locks`)

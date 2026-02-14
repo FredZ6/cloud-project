@@ -38,6 +38,7 @@ env:
   PROJECT_NAME: ${{ vars.PROJECT_NAME || 'cloud-order-platform' }}
   DEFAULT_DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'dev' }}
   ECS_CLUSTER_NAME_OVERRIDE: ${{ vars.ECS_CLUSTER_NAME }}
+  ENABLE_PUBLIC_ALB: ${{ vars.ENABLE_PUBLIC_ALB || 'true' }}
   TF_AUTO_APPLY: ${{ vars.TF_AUTO_APPLY || 'false' }}
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
   TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
@@ -144,7 +145,8 @@ jobs:
           set +e
           terraform -chdir=infra/terraform/aws plan -input=false -no-color -detailed-exitcode -out=tfplan \
             -var="environment=${DEPLOY_ENV}" \
-            -var="project_name=${PROJECT_NAME}"
+            -var="project_name=${PROJECT_NAME}" \
+            -var="enable_public_alb=${ENABLE_PUBLIC_ALB}"
           plan_exit=$?
           set -e
 
