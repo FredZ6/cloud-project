@@ -225,6 +225,8 @@ resource "aws_security_group" "ecs_tasks" {
   description = "Security group for ECS tasks."
   vpc_id      = aws_vpc.main.id
 
+  # Ingress rules are handled by separate aws_security_group_rule resources for clarity and conditional logic.
+
   egress {
     description = "Allow all outbound traffic."
     from_port   = 0
@@ -236,6 +238,28 @@ resource "aws_security_group" "ecs_tasks" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ecs-tasks-sg"
   })
+}
+
+resource "aws_security_group_rule" "ecs_self_tcp" {
+  type                     = "ingress"
+  security_group_id        = aws_security_group.ecs_tasks.id
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs_tasks.id
+  description              = "Allow ECS tasks to talk to each other (demo dependencies + internal calls)."
+}
+
+resource "aws_security_group_rule" "ecs_public_ingress" {
+  for_each = (!var.enable_public_alb && length(var.public_task_ingress_cidr_blocks) > 0) ? local.public_service_definitions : {}
+
+  type              = "ingress"
+  security_group_id = aws_security_group.ecs_tasks.id
+  from_port         = each.value.port
+  to_port           = each.value.port
+  protocol          = "tcp"
+  cidr_blocks       = var.public_task_ingress_cidr_blocks
+  description       = "Direct access to ${each.key} when ALB is disabled."
 }
 
 resource "aws_security_group_rule" "ecs_from_alb" {
