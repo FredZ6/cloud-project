@@ -85,6 +85,19 @@ locals {
     ? "http://${aws_lb.public[0].dns_name}/.well-known/jwks.json"
     : "${local.auth_internal_base_url}/.well-known/jwks.json"
 
+  demo_rabbitmq_host = "rabbitmq.${local.service_discovery_namespace}"
+  demo_redis_host    = "redis.${local.service_discovery_namespace}"
+
+  demo_postgres_host_by_service = {
+    order-service     = "postgres-order.${local.service_discovery_namespace}"
+    inventory-service = "postgres-inventory.${local.service_discovery_namespace}"
+    payment-service   = "postgres-payment.${local.service_discovery_namespace}"
+  }
+
+  rabbitmq_host_effective             = var.enable_demo_dependencies ? local.demo_rabbitmq_host : var.rabbitmq_host
+  redis_host_effective                = var.enable_demo_dependencies ? local.demo_redis_host : var.redis_host
+  postgres_host_effective_by_service  = var.enable_demo_dependencies ? local.demo_postgres_host_by_service : {}
+
   base_environment_by_service = {
     auth-service = merge(
       {
@@ -98,10 +111,10 @@ locals {
 
     order-service = merge(
       {
-        ORDER_DB_URL                             = format("jdbc:postgresql://%s:%d/%s", var.postgres_host, var.postgres_port, lookup(var.postgres_database_names, "order-service", "order_db"))
+        ORDER_DB_URL                             = format("jdbc:postgresql://%s:%d/%s", lookup(local.postgres_host_effective_by_service, "order-service", var.postgres_host), var.postgres_port, lookup(var.postgres_database_names, "order-service", "order_db"))
         ORDER_DB_USER                            = var.postgres_username
         ORDER_DB_PASSWORD                        = var.postgres_password
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
@@ -117,14 +130,14 @@ locals {
 
     inventory-service = merge(
       {
-        INVENTORY_DB_URL                         = format("jdbc:postgresql://%s:%d/%s", var.postgres_host, var.postgres_port, lookup(var.postgres_database_names, "inventory-service", "inventory_db"))
+        INVENTORY_DB_URL                         = format("jdbc:postgresql://%s:%d/%s", lookup(local.postgres_host_effective_by_service, "inventory-service", var.postgres_host), var.postgres_port, lookup(var.postgres_database_names, "inventory-service", "inventory_db"))
         INVENTORY_DB_USER                        = var.postgres_username
         INVENTORY_DB_PASSWORD                    = var.postgres_password
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
-        REDIS_HOST                               = var.redis_host
+        REDIS_HOST                               = local.redis_host_effective
         REDIS_PORT                               = tostring(var.redis_port)
         MANAGEMENT_TRACING_SAMPLING_PROBABILITY = var.management_tracing_sampling_probability
       },
@@ -135,10 +148,10 @@ locals {
 
     payment-service = merge(
       {
-        PAYMENT_DB_URL                           = format("jdbc:postgresql://%s:%d/%s", var.postgres_host, var.postgres_port, lookup(var.postgres_database_names, "payment-service", "payment_db"))
+        PAYMENT_DB_URL                           = format("jdbc:postgresql://%s:%d/%s", lookup(local.postgres_host_effective_by_service, "payment-service", var.postgres_host), var.postgres_port, lookup(var.postgres_database_names, "payment-service", "payment_db"))
         PAYMENT_DB_USER                          = var.postgres_username
         PAYMENT_DB_PASSWORD                      = var.postgres_password
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
@@ -151,7 +164,7 @@ locals {
 
     notification-service = merge(
       {
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
