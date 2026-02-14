@@ -38,7 +38,10 @@ env:
   PROJECT_NAME: ${{ vars.PROJECT_NAME || 'cloud-order-platform' }}
   DEFAULT_DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'dev' }}
   ECS_CLUSTER_NAME_OVERRIDE: ${{ vars.ECS_CLUSTER_NAME }}
-  ENABLE_PUBLIC_ALB: ${{ vars.ENABLE_PUBLIC_ALB || 'true' }}
+  ENABLE_PUBLIC_ALB: ${{ vars.ENABLE_PUBLIC_ALB || 'false' }}
+  ENABLE_DEMO_DEPENDENCIES: ${{ vars.ENABLE_DEMO_DEPENDENCIES || 'true' }}
+  PUBLIC_TASK_INGRESS_CIDR_BLOCKS_JSON: ${{ vars.PUBLIC_TASK_INGRESS_CIDR_BLOCKS_JSON || '[]' }}
+  ECS_DESIRED_COUNT_BY_SERVICE_JSON: ${{ vars.ECS_DESIRED_COUNT_BY_SERVICE_JSON || '{"auth-service":1,"catalog-service":0,"order-service":1,"inventory-service":1,"payment-service":0,"notification-service":0}' }}
   TF_AUTO_APPLY: ${{ vars.TF_AUTO_APPLY || 'false' }}
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
   TF_STATE_LOCK_TABLE: ${{ vars.TF_STATE_LOCK_TABLE }}
@@ -120,6 +123,9 @@ jobs:
           DEPLOY_ENV: ${{ steps.meta.outputs.deploy_env }}
           TF_STATE_KEY: ${{ steps.meta.outputs.tf_state_key }}
           STATE_LOCK_TABLE: ${{ steps.meta.outputs.state_lock_table }}
+          TF_VAR_enable_demo_dependencies: ${{ env.ENABLE_DEMO_DEPENDENCIES }}
+          TF_VAR_public_task_ingress_cidr_blocks: ${{ env.PUBLIC_TASK_INGRESS_CIDR_BLOCKS_JSON }}
+          TF_VAR_ecs_desired_count_by_service: ${{ env.ECS_DESIRED_COUNT_BY_SERVICE_JSON }}
         run: |
           set -euo pipefail
 
@@ -130,6 +136,16 @@ jobs:
 
           if [[ -z "${STATE_LOCK_TABLE}" ]]; then
             echo "::error::Missing lock table name for Terraform backend."
+            exit 1
+          fi
+
+          if ! echo "${PUBLIC_TASK_INGRESS_CIDR_BLOCKS_JSON}" | jq -e 'type == "array"' >/dev/null; then
+            echo "::error::GitHub variable PUBLIC_TASK_INGRESS_CIDR_BLOCKS_JSON must be a JSON array (example: [\"1.2.3.4/32\"])."
+            exit 1
+          fi
+
+          if ! echo "${ECS_DESIRED_COUNT_BY_SERVICE_JSON}" | jq -e 'type == "object"' >/dev/null; then
+            echo "::error::GitHub variable ECS_DESIRED_COUNT_BY_SERVICE_JSON must be a JSON object (example: {\"auth-service\":1})."
             exit 1
           fi
 

@@ -28,3 +28,13 @@ dynamodb_table = "${aws_dynamodb_table.terraform_lock.name}"
 encrypt        = true
 EOT
 }
+
+output "github_actions_oidc_provider_arn" {
+  description = "IAM OIDC provider ARN for GitHub Actions."
+  value       = aws_iam_openid_connect_provider.github_actions.arn
+}
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN assumed by GitHub Actions (set GitHub secret AWS_ROLE_TO_ASSUME to this value)."
+  value       = aws_iam_role.github_actions_deploy.arn
+}

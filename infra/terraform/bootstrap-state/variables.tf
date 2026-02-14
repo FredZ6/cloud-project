@@ -45,3 +45,27 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "github_repository" {
+  description = "GitHub repository (OWNER/REPO) allowed to assume the deploy role via OIDC."
+  type        = string
+  default     = "FredZ6/cloud-project"
+}
+
+variable "github_ref" {
+  description = "GitHub ref allowed to assume the deploy role (example: refs/heads/main)."
+  type        = string
+  default     = "refs/heads/main"
+}
+
+variable "github_actions_role_name" {
+  description = "Optional IAM role name assumed by GitHub Actions. Empty string uses <project_name>-github-actions-deploy."
+  type        = string
+  default     = ""
+}
+
+variable "github_actions_policy_arn" {
+  description = "IAM policy ARN attached to the GitHub Actions deploy role."
+  type        = string
+  default     = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
