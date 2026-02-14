@@ -18,7 +18,6 @@ RUN --mount=type=cache,target=/root/.m2 \
 FROM ${RUNTIME_IMAGE}
 
 WORKDIR /app
-ENV SERVER_PORT=8080
 ENV JAVA_OPTS=""
 
 COPY --from=builder /tmp/app.jar /app/app.jar

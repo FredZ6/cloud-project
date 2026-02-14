@@ -470,7 +470,10 @@ resource "aws_ecs_task_definition" "service" {
         }
       ]
       environment = [
-        for env_name, env_value in local.service_environment_by_service[each.key] : {
+        for env_name, env_value in merge(
+          { SERVER_PORT = tostring(each.value.port) },
+          local.service_environment_by_service[each.key]
+        ) : {
           name  = env_name
           value = tostring(env_value)
         }
