@@ -465,6 +465,12 @@ resource "aws_ecs_service" "service" {
     assign_public_ip = true
   }
 
+  service_registries {
+    registry_arn   = aws_service_discovery_service.microservice[each.key].arn
+    container_name = each.key
+    container_port = each.value.port
+  }
+
   dynamic "load_balancer" {
     for_each = each.value.expose_public ? [1] : []
     iterator = lb
