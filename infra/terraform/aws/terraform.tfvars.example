@@ -2,6 +2,13 @@ aws_region   = "us-east-1"
 environment  = "dev"
 project_name = "cloud-order-platform"
 
+# Accounts that cannot create load balancers can disable ALB and use direct task public IP access.
+# enable_public_alb = false
+# public_task_ingress_cidr_blocks = ["1.2.3.4/32"]
+#
+# Demo-only: provision RabbitMQ/Redis/Postgres inside ECS for a quick end-to-end run.
+# enable_demo_dependencies = true
+
 # External dependencies (replace with your real endpoints).
 postgres_host = "your-postgres-hostname"
 postgres_port = 5432

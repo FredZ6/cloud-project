@@ -78,7 +78,27 @@ locals {
     )
   }
 
-  auth_jwks_uri = "http://${aws_lb.public.dns_name}/.well-known/jwks.json"
+  service_discovery_namespace = aws_service_discovery_private_dns_namespace.main.name
+  auth_internal_base_url      = "http://auth-service.${local.service_discovery_namespace}:8084"
+
+  auth_jwks_uri = (
+    var.enable_public_alb
+      ? "http://${aws_lb.public[0].dns_name}/.well-known/jwks.json"
+      : "${local.auth_internal_base_url}/.well-known/jwks.json"
+  )
+
+  demo_rabbitmq_host = "rabbitmq.${local.service_discovery_namespace}"
+  demo_redis_host    = "redis.${local.service_discovery_namespace}"
+
+  demo_postgres_host_by_service = {
+    order-service     = "postgres-order.${local.service_discovery_namespace}"
+    inventory-service = "postgres-inventory.${local.service_discovery_namespace}"
+    payment-service   = "postgres-payment.${local.service_discovery_namespace}"
+  }
+
+  rabbitmq_host_effective             = var.enable_demo_dependencies ? local.demo_rabbitmq_host : var.rabbitmq_host
+  redis_host_effective                = var.enable_demo_dependencies ? local.demo_redis_host : var.redis_host
+  postgres_host_effective_by_service  = var.enable_demo_dependencies ? local.demo_postgres_host_by_service : {}
 
   base_environment_by_service = {
     auth-service = merge(
@@ -93,10 +113,10 @@ locals {
 
     order-service = merge(
       {
-        ORDER_DB_URL                             = format("jdbc:postgresql://%s:%d/%s", var.postgres_host, var.postgres_port, lookup(var.postgres_database_names, "order-service", "order_db"))
+        ORDER_DB_URL                             = format("jdbc:postgresql://%s:%d/%s", lookup(local.postgres_host_effective_by_service, "order-service", var.postgres_host), var.postgres_port, lookup(var.postgres_database_names, "order-service", "order_db"))
         ORDER_DB_USER                            = var.postgres_username
         ORDER_DB_PASSWORD                        = var.postgres_password
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
@@ -112,14 +132,14 @@ locals {
 
     inventory-service = merge(
       {
-        INVENTORY_DB_URL                         = format("jdbc:postgresql://%s:%d/%s", var.postgres_host, var.postgres_port, lookup(var.postgres_database_names, "inventory-service", "inventory_db"))
+        INVENTORY_DB_URL                         = format("jdbc:postgresql://%s:%d/%s", lookup(local.postgres_host_effective_by_service, "inventory-service", var.postgres_host), var.postgres_port, lookup(var.postgres_database_names, "inventory-service", "inventory_db"))
         INVENTORY_DB_USER                        = var.postgres_username
         INVENTORY_DB_PASSWORD                    = var.postgres_password
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
-        REDIS_HOST                               = var.redis_host
+        REDIS_HOST                               = local.redis_host_effective
         REDIS_PORT                               = tostring(var.redis_port)
         MANAGEMENT_TRACING_SAMPLING_PROBABILITY = var.management_tracing_sampling_probability
       },
@@ -130,10 +150,10 @@ locals {
 
     payment-service = merge(
       {
-        PAYMENT_DB_URL                           = format("jdbc:postgresql://%s:%d/%s", var.postgres_host, var.postgres_port, lookup(var.postgres_database_names, "payment-service", "payment_db"))
+        PAYMENT_DB_URL                           = format("jdbc:postgresql://%s:%d/%s", lookup(local.postgres_host_effective_by_service, "payment-service", var.postgres_host), var.postgres_port, lookup(var.postgres_database_names, "payment-service", "payment_db"))
         PAYMENT_DB_USER                          = var.postgres_username
         PAYMENT_DB_PASSWORD                      = var.postgres_password
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
@@ -146,7 +166,7 @@ locals {
 
     notification-service = merge(
       {
-        RABBITMQ_HOST                            = var.rabbitmq_host
+        RABBITMQ_HOST                            = local.rabbitmq_host_effective
         RABBITMQ_PORT                            = tostring(var.rabbitmq_port)
         RABBITMQ_USER                            = var.rabbitmq_username
         RABBITMQ_PASSWORD                        = var.rabbitmq_password
@@ -188,6 +208,8 @@ locals {
 }
 
 resource "aws_security_group" "alb" {
+  count = var.enable_public_alb ? 1 : 0
+
   name        = "${local.name_prefix}-alb-sg"
   description = "Ingress security group for public ALB."
   vpc_id      = aws_vpc.main.id
@@ -218,6 +240,8 @@ resource "aws_security_group" "ecs_tasks" {
   description = "Security group for ECS tasks."
   vpc_id      = aws_vpc.main.id
 
+  # Ingress rules are handled by separate aws_security_group_rule resources for clarity and conditional logic.
+
   egress {
     description = "Allow all outbound traffic."
     from_port   = 0
@@ -231,23 +255,47 @@ resource "aws_security_group" "ecs_tasks" {
   })
 }
 
+resource "aws_security_group_rule" "ecs_self_tcp" {
+  type                     = "ingress"
+  security_group_id        = aws_security_group.ecs_tasks.id
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs_tasks.id
+  description              = "Allow ECS tasks to talk to each other (demo dependencies + internal calls)."
+}
+
+resource "aws_security_group_rule" "ecs_public_ingress" {
+  for_each = (!var.enable_public_alb && length(var.public_task_ingress_cidr_blocks) > 0) ? local.public_service_definitions : {}
+
+  type              = "ingress"
+  security_group_id = aws_security_group.ecs_tasks.id
+  from_port         = each.value.port
+  to_port           = each.value.port
+  protocol          = "tcp"
+  cidr_blocks       = var.public_task_ingress_cidr_blocks
+  description       = "Direct access to ${each.key} when ALB is disabled."
+}
+
 resource "aws_security_group_rule" "ecs_from_alb" {
-  for_each = local.public_service_definitions
+  for_each = var.enable_public_alb ? local.public_service_definitions : {}
 
   type                     = "ingress"
   security_group_id        = aws_security_group.ecs_tasks.id
   from_port                = each.value.port
   to_port                  = each.value.port
   protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
+  source_security_group_id = aws_security_group.alb[0].id
   description              = "Allow ALB to access ${each.key}."
 }
 
 resource "aws_lb" "public" {
+  count = var.enable_public_alb ? 1 : 0
+
   name               = trimsuffix(substr("${local.name_prefix}-alb", 0, 32), "-")
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
+  security_groups    = [aws_security_group.alb[0].id]
   subnets            = local.public_subnet_ids
 
   tags = merge(local.common_tags, {
@@ -256,7 +304,7 @@ resource "aws_lb" "public" {
 }
 
 resource "aws_lb_target_group" "service" {
-  for_each = local.public_service_definitions
+  for_each = var.enable_public_alb ? local.public_service_definitions : {}
 
   name        = trimsuffix(substr("${var.environment}-${replace(each.key, "service", "svc")}", 0, 32), "-")
   port        = each.value.port
@@ -281,7 +329,9 @@ resource "aws_lb_target_group" "service" {
 }
 
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.public.arn
+  count = var.enable_public_alb ? 1 : 0
+
+  load_balancer_arn = aws_lb.public[0].arn
   port              = 80
   protocol          = "HTTP"
 
@@ -297,9 +347,9 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_lb_listener_rule" "service" {
-  for_each = local.public_service_definitions
+  for_each = var.enable_public_alb ? local.public_service_definitions : {}
 
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = aws_lb_listener.http[0].arn
   priority     = each.value.listener_priority
 
   action {
@@ -420,7 +470,10 @@ resource "aws_ecs_task_definition" "service" {
         }
       ]
       environment = [
-        for env_name, env_value in local.service_environment_by_service[each.key] : {
+        for env_name, env_value in merge(
+          { SERVER_PORT = tostring(each.value.port) },
+          local.service_environment_by_service[each.key]
+        ) : {
           name  = env_name
           value = tostring(env_value)
         }
@@ -465,8 +518,12 @@ resource "aws_ecs_service" "service" {
     assign_public_ip = true
   }
 
+  service_registries {
+    registry_arn = aws_service_discovery_service.microservice[each.key].arn
+  }
+
   dynamic "load_balancer" {
-    for_each = each.value.expose_public ? [1] : []
+    for_each = (var.enable_public_alb && each.value.expose_public) ? [1] : []
     iterator = lb
 
     content {
@@ -476,9 +533,7 @@ resource "aws_ecs_service" "service" {
     }
   }
 
-  depends_on = [
-    aws_lb_listener_rule.service
-  ]
+  depends_on = [aws_lb_listener_rule.service]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-${each.key}-service"

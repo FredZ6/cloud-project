@@ -1,8 +1,12 @@
 receivers:
   otlp:
     protocols:
-      http:
       grpc:
+        # Bind to all interfaces so services can reach the collector via Docker port-mapping.
+        endpoint: 0.0.0.0:4317
+      http:
+        # Bind to all interfaces so services can reach the collector via Docker port-mapping.
+        endpoint: 0.0.0.0:4318
 
 processors:
   batch:

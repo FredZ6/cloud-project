@@ -12,13 +12,12 @@ COPY pom.xml /workspace/pom.xml
 COPY services /workspace/services
 
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -ntp -Dmaven.test.skip=true -pl services/${SERVICE_MODULE} -am package && \
+    mvn -B -ntp -Dmaven.test.skip=true -pl services/${SERVICE_MODULE} -am package spring-boot:repackage && \
     cp /workspace/services/${SERVICE_MODULE}/target/*-SNAPSHOT.jar /tmp/app.jar
 
 FROM ${RUNTIME_IMAGE}
 
 WORKDIR /app
-ENV SERVER_PORT=8080
 ENV JAVA_OPTS=""
 
 COPY --from=builder /tmp/app.jar /app/app.jar

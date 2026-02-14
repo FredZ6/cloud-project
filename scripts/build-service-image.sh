@@ -10,6 +10,9 @@ Usage:
 Examples:
   ./scripts/build-service-image.sh order-service
   ./scripts/build-service-image.sh inventory cloud-order-platform/inventory-service:dev
+
+Environment:
+  DOCKER_PLATFORM  Optional Docker build platform (default: linux/amd64).
 EOF
 }
 
@@ -35,9 +38,11 @@ case "${raw_service}" in
 esac
 
 image="${2:-cloud-order-platform/${module}:local}"
+platform="${DOCKER_PLATFORM:-linux/amd64}"
 
 echo "Building module ${module} -> ${image}"
 docker build \
+  --platform "${platform}" \
   --build-arg SERVICE_MODULE="${module}" \
   -t "${image}" \
   -f Dockerfile \
