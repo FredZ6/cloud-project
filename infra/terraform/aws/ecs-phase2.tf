@@ -81,9 +81,11 @@ locals {
   service_discovery_namespace = aws_service_discovery_private_dns_namespace.main.name
   auth_internal_base_url      = "http://auth-service.${local.service_discovery_namespace}:8084"
 
-  auth_jwks_uri = var.enable_public_alb
-    ? "http://${aws_lb.public[0].dns_name}/.well-known/jwks.json"
-    : "${local.auth_internal_base_url}/.well-known/jwks.json"
+  auth_jwks_uri = (
+    var.enable_public_alb
+      ? "http://${aws_lb.public[0].dns_name}/.well-known/jwks.json"
+      : "${local.auth_internal_base_url}/.well-known/jwks.json"
+  )
 
   demo_rabbitmq_host = "rabbitmq.${local.service_discovery_namespace}"
   demo_redis_host    = "redis.${local.service_discovery_namespace}"
@@ -530,7 +532,7 @@ resource "aws_ecs_service" "service" {
     }
   }
 
-  depends_on = var.enable_public_alb ? [aws_lb_listener_rule.service] : []
+  depends_on = [aws_lb_listener_rule.service]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-${each.key}-service"
