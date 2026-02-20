@@ -23,6 +23,39 @@ This now provisions:
 - AWS CLI configured (`aws configure` or OIDC/session credentials)
 - Docker
 
+## Quick one-command flow
+
+Deploy:
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+make deploy
+```
+
+Destroy (cost stop):
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+make destroy
+```
+
+Equivalent script commands:
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+./scripts/deploy-aws.sh --yes
+```
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+./scripts/destroy-aws.sh --yes
+```
+
+Notes:
+
+- `destroy-aws.sh` defaults to destroying only `infra/terraform/aws`.
+- Add `--include-bootstrap-state` only when you also want to delete remote-state bootstrap resources.
+
 ## 1) Bootstrap remote Terraform state (one-time)
 
 ```bash

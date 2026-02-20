@@ -194,6 +194,37 @@ Monitoring stack UIs:
 Operational guide: `docs/runbook.md`
 AWS deployment foundation guide: `docs/deploy-aws.md`
 
+## One-command AWS deploy/destroy
+
+Deploy infrastructure in one command:
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+make deploy
+```
+
+Destroy infrastructure in one command:
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+make destroy
+```
+
+Equivalent script commands:
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+./scripts/deploy-aws.sh --yes
+```
+
+```bash
+cd /Users/fredz/Documents/New\ project/cloud-order-platform
+./scripts/destroy-aws.sh --yes
+```
+
+By default `destroy-aws.sh` only destroys `infra/terraform/aws` and keeps remote-state bootstrap resources.
+Pass `--include-bootstrap-state` only when you intentionally want to remove bootstrap resources too.
+
 OpenAPI check helper:
 
 ```bash
