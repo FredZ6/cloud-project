@@ -14,3 +14,4 @@ infra/terraform/**/.terraform/
 infra/terraform/**/terraform.tfvars
 infra/terraform/**/backend.hcl
 infra/terraform/**/tfplan
+infra/terraform/**/*.tfplan
